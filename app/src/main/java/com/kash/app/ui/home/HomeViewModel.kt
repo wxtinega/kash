@@ -8,6 +8,8 @@ import com.kash.app.data.KashRepository
 import com.kash.app.data.MissingMoney
 import com.kash.app.data.Question
 import com.kash.app.data.ScamWarning
+import com.kash.app.data.SenderQuestion
+import com.kash.parser.Provider
 import com.kash.app.data.TxItem
 import com.kash.insights.Category
 import com.kash.insights.SafeToSpend
@@ -38,6 +40,7 @@ data class HomeUi(
     val scams: List<ScamWarning> = emptyList(),
     val gaps: List<MissingMoney> = emptyList(),
     val fuliza: Money = Money.ZERO,
+    val senderQuestions: List<SenderQuestion> = emptyList(),
 )
 
 class HomeViewModel(private val repo: KashRepository) : ViewModel() {
@@ -73,8 +76,21 @@ class HomeViewModel(private val repo: KashRepository) : ViewModel() {
             scams = s.scams,
             gaps = s.gaps,
             fuliza = s.fulizaOutstanding,
+            senderQuestions = s.senderQuestions,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUi())
+
+    fun answerSender(q: SenderQuestion, isMyBank: Boolean) {
+        viewModelScope.launch {
+            try { repo.answerSender(q.sender, q.provider, isMyBank) } catch (t: Throwable) { _messages.tryEmit(HumanErrors.message(t)) }
+        }
+    }
+
+    fun setBalance(provider: Provider, balance: Money) {
+        viewModelScope.launch {
+            try { repo.setBalance(provider, balance) } catch (t: Throwable) { _messages.tryEmit(HumanErrors.message(t)) }
+        }
+    }
 
     /** The card disappears instantly; if saving fails, it comes back with a plain-language note. */
     fun answer(q: Question, category: Category) {

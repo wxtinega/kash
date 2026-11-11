@@ -92,6 +92,10 @@ class BankParser(
         return generic(provider, body, base)
     }
 
+    /** True when one of this bank's exact (real-message) formats matches, not just the generic reader. */
+    fun matchesKnownFormat(provider: Provider, body: String): Boolean =
+        compiled[provider].orEmpty().any { (_, r) -> r.containsMatchIn(body) }
+
     private fun fromRule(provider: Provider, rule: BankRule, m: MatchResult, base: Transaction): ParseOutcome {
         val g = m.groups
         val who = g.named("who")?.substringBefore('>')?.let { Fields.splitNameAndPhone(it) }
@@ -181,7 +185,7 @@ class BankParser(
         private val CREDIT = Regex("""\b(credited|received|deposited|deposit of|has been paid into)\b""", RegexOption.IGNORE_CASE)
         private val DEBIT = Regex("""\b(debited|withdrawn|withdrawal|paid to|payment to|purchase|spent|sent to|transferred to)\b""", RegexOption.IGNORE_CASE)
         /** Bank's own reference; "M-PESA Ref" is captured separately as the linked M-Pesa code. */
-        private val REFERENCE = Regex("""(?<!PESA )\bRef(?:erence)?\.?\s*(?:No\.?)?\s*:?\s*([A-Z0-9]{6,20})\b""", RegexOption.IGNORE_CASE)
+        private val REFERENCE = Regex("""(?<!PESA )\b(?:Ref(?:erence)?|Tx\.?\s*ID)\.?\s*(?:No\.?)?\s*:?\s*([A-Z0-9]{6,20})\b""", RegexOption.IGNORE_CASE)
         private val MPESA_REF = Regex("""M-?PESA Ref\.?\s*(?:No\.?)?\s*:?\s*([A-Z][A-Z0-9]{9})\b""", RegexOption.IGNORE_CASE)
         private val FAILED = Regex("""\b(failed|declined|unsuccessful|insufficient funds|reversed)\b""", RegexOption.IGNORE_CASE)
         private val PAID_TO_YOUR_MPESA = Regex("""You have received\s*(?:Ksh|KES|Kshs)\.?\s?[\d,.]+ from .+? with M-?Pesa Ref""", RegexOption.IGNORE_CASE)
@@ -218,6 +222,26 @@ class BankParser(
             ),
         )
 
-        val DEFAULT_RULES: Map<Provider, List<BankRule>> = mapOf(Provider.COOP to COOP_RULES)
+        /**
+         * Co-op Bank's money market fund (Co-op Trust) messages come on the same sender as the bank, e.g.
+         *   "Dear NAME, We confirm a deposit of 700.00 to your CL42326. Tx ID: CB1177155. For enquiries call 0711049000"
+         *   "Dear NAME, Your redemption request for Kes 3,000.00 has been processed and sent to your account."
+         * They confirm money already moved by M-Pesa/bank, so they update savings only.
+         */
+        private const val NUM_AMT = """(?:(?:Ksh|KES|Kshs)\.?\s?)?(?<amt>(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?)"""
+        val COOP_FUND_RULES = listOf(
+            BankRule(
+                "coop-fund-deposit", TxType.FUND_DEPOSIT,
+                """We confirm a deposit of\s*$NUM_AMT to your (?<acct>[A-Z]{1,4}\d{3,})""",
+                label = "Co-op Money Market Fund",
+            ),
+            BankRule(
+                "coop-fund-redemption", TxType.FUND_REDEMPTION,
+                """redemption request for\s*$NUM_AMT has been processed""",
+                label = "Co-op Money Market Fund",
+            ),
+        )
+
+        val DEFAULT_RULES: Map<Provider, List<BankRule>> = mapOf(Provider.COOP to COOP_FUND_RULES + COOP_RULES)
     }
 }

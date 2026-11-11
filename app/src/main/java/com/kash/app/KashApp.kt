@@ -4,9 +4,11 @@ import android.app.Application
 import com.kash.app.core.Connectivity
 import com.kash.app.core.SettingsStore
 import com.kash.app.data.KashRepository
+import com.kash.app.data.KashPrefs
 import com.kash.app.data.LocalRepository
 import com.kash.app.data.PrefsLearnedRules
 import com.kash.app.data.SmsInbox
+import com.kash.app.sync.MonthlySummaryWorker
 import com.kash.app.sync.SyncWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -21,6 +23,7 @@ class KashApp : Application() {
             messages = { SmsInbox.read(this) },
             hasAccess = { SmsInbox.hasPermission(this) },
             learned = PrefsLearnedRules(this),
+            prefs = KashPrefs(this),
         )
     }
     val settings: SettingsStore by lazy { SettingsStore(this) }
@@ -31,5 +34,6 @@ class KashApp : Application() {
         // Start reading messages immediately, in the background, so data is ready before the first screen.
         appScope.launch { runCatching { repository.sync() } }
         SyncWorker.schedule(this)
+        MonthlySummaryWorker.schedule(this)
     }
 }

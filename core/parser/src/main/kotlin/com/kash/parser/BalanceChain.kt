@@ -50,7 +50,7 @@ object BalanceChain {
     fun delta(tx: Transaction): Money = when (tx.type.flow) {
         Flow.IN -> tx.amount
         Flow.OUT -> -(tx.amount + tx.fee)
-        Flow.CREDIT_LINE, Flow.ADJUST -> Money.ZERO
+        Flow.CREDIT_LINE, Flow.ADJUST, Flow.NONE -> Money.ZERO
     }
 
     private fun explainedByFuliza(tx: Transaction, gap: Money, credits: List<Transaction>): Boolean {

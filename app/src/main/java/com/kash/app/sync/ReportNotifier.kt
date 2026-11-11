@@ -33,8 +33,10 @@ object ReportNotifier {
     private const val PREFS = "kash_notifications"
     private const val KEY_LAST = "last_report_notified"
 
-    fun maybeNotify(context: Context, state: RepoState, today: LocalDate = LocalDate.now()) {
-        if (today.dayOfMonth > 3) return
+    fun maybeNotify(context: Context, state: RepoState, now: java.time.LocalDateTime = java.time.LocalDateTime.now()) {
+        val today = now.toLocalDate()
+        // Window: 1st–3rd of the month, not before 8 AM (never at night).
+        if (today.dayOfMonth > 3 || now.hour < MonthlySummaryWorker.HOUR) return
         val month = YearMonth.from(today).minusMonths(1)
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         if (prefs.getString(KEY_LAST, null) == month.toString()) return

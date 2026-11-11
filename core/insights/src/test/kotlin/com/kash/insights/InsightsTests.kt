@@ -256,3 +256,15 @@ class RealAirtelInsightsTest {
         assertTrue(c.place(second) is Placement.Ask) // not auto-filed as Food
     }
 }
+
+class FundAccountTest {
+    @Test fun paybillToConfirmedFundAccountIsSavings() {
+        val tx = (com.kash.parser.SmsPipeline().process(com.kash.parser.RawSms("MPESA",
+            "UKBDR29ABC Confirmed. Ksh700.00 sent to Co-operative Bank Money Transfer for account CL42326 on 11/11/26 at 8:31 PM New M-PESA balance is Ksh300.00. Transaction cost, Ksh0.00.",
+            java.time.Instant.parse("2026-11-11T17:31:00Z"))) as com.kash.parser.ParseOutcome.Parsed).tx
+        assertTrue(Categorizer().place(tx) is Placement.Ask) // unknown before the fund confirms
+        val r = (Categorizer(fundAccounts = { mapOf("CL42326" to "coopmmf") }).place(tx) as Placement.Known).result
+        assertEquals(Category.SAVINGS, r.category)
+        assertEquals("coopmmf", r.schemeId)
+    }
+}

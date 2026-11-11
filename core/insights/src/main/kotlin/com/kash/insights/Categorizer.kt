@@ -43,6 +43,8 @@ class Categorizer(
     /** M-Pesa codes that a bank message also mentions (the two halves of one transfer). */
     private val linkedCodes: () -> Set<String> = { emptySet() },
     private val isOwnAccount: (String) -> Boolean = { false },
+    /** Fund account numbers learned from fund confirmations (e.g. "CL42326" → Co-op MMF). */
+    private val fundAccounts: () -> Map<String, String> = { emptyMap() },
 ) {
 
     fun place(tx: Transaction): Placement {
@@ -88,6 +90,15 @@ class Categorizer(
     private fun schemeEvidence(tx: Transaction): Placement? {
         val types = setOf(TxType.TILL, TxType.PAYBILL, TxType.BANK_DEBIT, TxType.RECEIVED, TxType.BANK_CREDIT)
         if (tx.type !in types) return null
+        // Paybill to a fund account the fund itself has confirmed (works even when the M-Pesa message
+        // only names the bank, e.g. "Co-operative Bank Money Transfer for account CL42326").
+        val acct = tx.accountNumber
+        if (tx.type == TxType.PAYBILL && acct != null) {
+            fundAccounts()[acct.uppercase()]?.let { id ->
+                val scheme = SchemeRegistry.byId(id)
+                return Placement.Known(Categorized(Category.SAVINGS, Source.SCHEME, "Saved into ${scheme?.name ?: "your fund"} (account $acct)", id))
+            }
+        }
         if (tx.counterpartyPhone != null) return null // a person (surnames like NDOVU), not a business
         val name = tx.counterparty?.let(MerchantKey::normalizeName) ?: return null
         val incoming = tx.type == TxType.RECEIVED || tx.type == TxType.BANK_CREDIT

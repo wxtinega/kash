@@ -43,6 +43,8 @@ enum class Flow {
     CREDIT_LINE,
     /** Reversal: the message states the corrected balance directly. */
     ADJUST,
+    /** Information only (e.g. a fund confirming money it already received): no wallet/bank movement. */
+    NONE,
 }
 
 enum class TxType(val flow: Flow) {
@@ -60,6 +62,9 @@ enum class TxType(val flow: Flow) {
     REVERSAL(Flow.ADJUST),
     BANK_CREDIT(Flow.IN),
     BANK_DEBIT(Flow.OUT),
+    /** A fund confirming it received / paid out money. Updates savings only, never spending. */
+    FUND_DEPOSIT(Flow.NONE),
+    FUND_REDEMPTION(Flow.NONE),
     /** A real confirmation in a format Kash doesn't know yet: amount, cost and balance still counted. */
     OTHER_IN(Flow.IN),
     OTHER_OUT(Flow.OUT),
@@ -129,6 +134,12 @@ sealed interface ParseOutcome {
         val signals: List<ScamSignal>,
         val imitates: Provider? = null,
     ) : ParseOutcome
+    /**
+     * From a sender Kash doesn't know yet whose name looks like a bank, and whose message matches that
+     * bank's exact formats (e.g. the real Co-op sender ID differs from the one Kash expects). The app asks
+     * once "Is this your bank?"; if yes, the sender is trusted from then on.
+     */
+    data class ConfirmSender(val sender: String, val provider: Provider, val tx: Transaction) : ParseOutcome
     /** From a trusted sender and looks like money moved, but no rule could read it confidently. */
     data class NeedsReview(val provider: Provider, val why: String, val partial: Transaction? = null) : ParseOutcome
 }

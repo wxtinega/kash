@@ -18,6 +18,7 @@ import com.kash.parser.ParseOutcome
 import com.kash.parser.Provider
 import com.kash.parser.RawSms
 import com.kash.parser.ScamSignal
+import com.kash.parser.SenderPolicy
 import com.kash.parser.SmsPipeline
 import com.kash.parser.Transaction
 import com.kash.parser.TxType
@@ -57,11 +58,16 @@ data class AccountCard(
     val updatedAt: LocalDateTime?,
     /** Fuliza still owed on this wallet. What you really have = balance − owed, which can be negative. */
     val owed: Money = Money.ZERO,
+    /** True when worked out from a past balance plus later messages, rather than stated by the latest one. */
+    val estimated: Boolean = false,
 ) {
     val realBalance: Money? get() = balance?.let { it - owed }
 }
 
 data class ScamWarning(val sender: String, val reasons: List<ScamSignal>, val at: LocalDateTime)
+
+/** "Messages from CO-OP look like Co-op Bank. Is this your bank?" */
+data class SenderQuestion(val sender: String, val provider: Provider, val example: Money)
 
 data class MissingMoney(val account: String, val amount: Money, val between: LocalDateTime, val and: LocalDateTime)
 
@@ -76,6 +82,7 @@ data class RepoState(
     val holdings: List<HoldingSummary> = emptyList(),
     val scams: List<ScamWarning> = emptyList(),
     val gaps: List<MissingMoney> = emptyList(),
+    val senderQuestions: List<SenderQuestion> = emptyList(),
     val fulizaOutstanding: Money = Money.ZERO,
     val lastSync: LocalDateTime? = null,
 )
@@ -90,6 +97,10 @@ interface KashRepository {
     suspend fun sync()
     /** Saves the user's answer to "What was this?" and applies it to every payment to the same place. */
     suspend fun answer(txId: String, category: Category)
+    /** The user confirmed (or rejected) an unfamiliar sender as their bank. Re-reads messages. */
+    suspend fun answerSender(sender: String, provider: Provider, isMyBank: Boolean)
+    /** For accounts whose messages never state a balance (e.g. Co-op deposits). Re-computes. */
+    suspend fun setBalance(provider: Provider, balance: Money)
 }
 
 /**
@@ -101,6 +112,7 @@ class LocalRepository(
     private val messages: suspend () -> List<RawSms>,
     private val hasAccess: () -> Boolean,
     private val learned: LearnedRules = InMemoryLearnedRules(),
+    private val prefs: KashPrefs? = null,
 ) : KashRepository {
 
     private val _state = MutableStateFlow(RepoState())
@@ -111,22 +123,40 @@ class LocalRepository(
 
     override suspend fun sync(): Unit = lock.withLock { withContext(Dispatchers.Default) { syncLocked() } }
 
+    private var senderQuestions: List<SenderQuestion> = emptyList()
+
     private suspend fun syncLocked() {
-        val pipeline = SmsPipeline()
+        val pipeline = SmsPipeline(senders = SenderPolicy.withConfirmed(prefs?.confirmedSenders().orEmpty()))
+        val rejected = prefs?.rejectedSenders().orEmpty()
         val txs = mutableListOf<Transaction>()
         val scams = mutableListOf<ScamWarning>()
+        val questions = linkedMapOf<String, SenderQuestion>()
         for (sms in messages()) {
             when (val o = pipeline.process(sms)) {
                 is ParseOutcome.Parsed -> txs += o.tx
                 is ParseOutcome.NeedsReview -> o.partial?.takeIf { it.amount.isPositive }?.let { txs += it }
+                is ParseOutcome.ConfirmSender -> if (o.sender !in rejected) {
+                    questions.getOrPut(o.sender) { SenderQuestion(o.sender, o.provider, o.tx.amount) }
+                }
                 is ParseOutcome.ScamAlert -> scams += ScamWarning(o.sender, o.signals, LocalDateTime.ofInstant(sms.receivedAt, java.time.ZoneId.of("Africa/Nairobi")))
                 else -> Unit
             }
         }
         parsed = txs.sortedByDescending { it.occurredAt }
+        senderQuestions = questions.values.toList()
         // Only recent scam attempts are worth a warning; months-old ones are just noise.
         val recent = LocalDateTime.now().minusDays(SCAM_WARNING_DAYS)
         _state.value = build(scams.filter { it.at >= recent }.sortedByDescending { it.at })
+    }
+
+    override suspend fun answerSender(sender: String, provider: Provider, isMyBank: Boolean) {
+        if (isMyBank) prefs?.confirmSender(sender, provider) else prefs?.rejectSender(sender)
+        sync()
+    }
+
+    override suspend fun setBalance(provider: Provider, balance: Money) {
+        prefs?.setManualBalance(provider, balance)
+        withContext(Dispatchers.Default) { _state.update { build(it.scams) } }
     }
 
     override suspend fun answer(txId: String, category: Category) = withContext(Dispatchers.Default) {
@@ -138,12 +168,23 @@ class LocalRepository(
 
     private fun build(scams: List<ScamWarning>): RepoState {
         val linked = parsed.mapNotNull { it.linkedCode }.toSet()
-        val categorizer = Categorizer(learned = learned, linkedCodes = { linked })
+        // Fund account numbers confirmed by the fund itself (e.g. Co-op MMF "CL42326").
+        val fundAccounts = parsed.filter { it.type == TxType.FUND_DEPOSIT || it.type == TxType.FUND_REDEMPTION }
+            .mapNotNull { t -> t.accountNumber?.let { it.uppercase() to fundSchemeFor(t.provider) } }.toMap()
+        val categorizer = Categorizer(learned = learned, linkedCodes = { linked }, fundAccounts = { fundAccounts })
         val items = mutableListOf<TxItem>()
         val questions = mutableListOf<Question>()
         val investEvents = mutableMapOf<String, MutableList<InvestmentEvent>>()
 
         for (tx in parsed) {
+            if (tx.type == TxType.FUND_DEPOSIT || tx.type == TxType.FUND_REDEMPTION) {
+                // Confirmation of money already moved: updates savings only (the tracker merges it
+                // with the M-Pesa/bank payment if both exist, so it's never counted twice).
+                val ev = if (tx.type == TxType.FUND_DEPOSIT) InvestmentEvent.Contribution(tx.amount, tx.occurredAt.toLocalDate(), EventSource.FUND_MESSAGE)
+                else InvestmentEvent.Withdrawal(tx.amount, tx.occurredAt.toLocalDate(), EventSource.FUND_MESSAGE)
+                investEvents.getOrPut(fundSchemeFor(tx.provider)) { mutableListOf() } += ev
+                continue
+            }
             if (tx.type == TxType.FULIZA_LOAN) {
                 // The borrowed amount isn't spending (it's spent by the payment it covered); its fee is.
                 if (tx.fee.isPositive) items += TxItem(
@@ -192,17 +233,7 @@ class LocalRepository(
             }
         }
 
-        val accounts = parsed.filter { it.balanceAfter != null }
-            .groupBy { it.provider }
-            .map { (provider, list) ->
-                val latest = list.maxBy { it.occurredAt }
-                AccountCard(
-                    provider.name, provider.displayName, provider, latest.balanceAfter, latest.occurredAt,
-                    owed = if (provider == Provider.MPESA) fuliza else Money.ZERO,
-                )
-            }
-            .sortedBy { if (it.provider == Provider.MPESA) 0 else 1 }
-
+        val accounts = accountsFrom(parsed, fuliza)
         val today = LocalDate.now()
         val holdings = investEvents.mapNotNull { (id, events) ->
             SchemeRegistry.byId(id)?.let { InvestmentTracker.summarize(it, events, today) }
@@ -217,9 +248,48 @@ class LocalRepository(
             holdings = holdings,
             scams = scams,
             gaps = gaps,
+            senderQuestions = senderQuestions,
             fulizaOutstanding = fuliza,
             lastSync = LocalDateTime.now(),
         )
+    }
+
+    /**
+     * One card per wallet/bank. Balance = the latest balance a message stated, or one the user typed in
+     * (whichever is newer), moved up/down by every later message that doesn't state a balance.
+     * Banks whose messages never state a balance (Co-op deposits) show "Set balance" until the user does.
+     */
+    private fun accountsFrom(all: List<Transaction>, fuliza: Money): List<AccountCard> {
+        val manual = prefs?.manualBalances().orEmpty()
+        return all.filter { it.type.flow != Flow.NONE }.groupBy { it.provider }.map { (provider, list) ->
+            val ordered = list.sortedWith(compareBy<Transaction> { it.occurredAt }.thenBy { it.receivedAt })
+            val stated = ordered.lastOrNull { it.balanceAfter != null }
+            val typed = manual[provider]
+            var balance: Money? = null
+            var at: LocalDateTime? = null
+            var after: LocalDateTime? = null
+            if (typed != null && (stated == null || typed.second.isAfter(stated.occurredAt))) {
+                balance = typed.first; at = typed.second; after = typed.second
+            } else if (stated != null) {
+                balance = stated.balanceAfter; at = stated.occurredAt; after = stated.occurredAt
+            }
+            var estimated = false
+            if (balance != null && after != null) {
+                ordered.filter { it.occurredAt.isAfter(after) && it.balanceAfter == null }.forEach { t ->
+                    balance = balance!! + BalanceChain.delta(t); at = t.occurredAt; estimated = true
+                }
+            }
+            AccountCard(
+                provider.name, provider.displayName, provider, balance, at,
+                owed = if (provider == Provider.MPESA) fuliza else Money.ZERO,
+                estimated = estimated,
+            )
+        }.sortedBy { if (it.provider?.isMobileMoney == true) 0 else 1 }
+    }
+
+    private fun fundSchemeFor(provider: Provider) = when (provider) {
+        Provider.COOP -> "coopmmf"
+        else -> "fund-${provider.name.lowercase()}"
     }
 
     private companion object {

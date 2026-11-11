@@ -34,6 +34,7 @@ class SenderPolicy(private val trusted: Map<String, Provider>) {
             val similar = when {
                 s == t -> true
                 t.length >= 4 && s.contains(t) -> true
+                s.length >= 4 && t.startsWith(s) -> true // "CO-OP" for "COOPBANK"
                 t.length == 3 && s.startsWith(t) -> true
                 t.length >= 5 && editDistance(s, t) <= 1 -> true
                 else -> false
@@ -95,5 +96,9 @@ class SenderPolicy(private val trusted: Map<String, Provider>) {
         )
 
         fun default(): SenderPolicy = SenderPolicy(DEFAULT_TRUSTED)
+
+        /** Built-in senders plus ones the user confirmed ("Yes, this is my bank"). */
+        fun withConfirmed(extra: Map<String, Provider>): SenderPolicy =
+            SenderPolicy(DEFAULT_TRUSTED + extra.mapKeys { (k, _) -> Sanitizer.normalizeSender(k) ?: k })
     }
 }

@@ -38,6 +38,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kash.app.data.AccountCard
+import androidx.compose.runtime.setValue
 import com.kash.app.data.Question
 import com.kash.app.ui.common.TxRow
 import com.kash.app.ui.components.ButtonStyle
@@ -59,7 +60,6 @@ import com.kash.app.ui.theme.Kash
 import com.kash.app.ui.theme.Space
 import com.kash.insights.Category
 import com.kash.insights.OUTGOING_CATEGORIES
-import androidx.compose.runtime.setValue
 import com.kash.insights.SafeToSpend
 import com.kash.parser.Provider
 import java.time.format.DateTimeFormatter
@@ -77,6 +77,10 @@ fun HomeScreen(
 ) {
     val ui by vm.ui.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { vm.messages.collect { snackbar.showSnackbar(it) } }
+    var editing by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<AccountCard?>(null) }
+    editing?.let { acct ->
+        SetBalanceDialog(acct, onDismiss = { editing = null }, onSave = { m -> acct.provider?.let { vm.setBalance(it, m) }; editing = null })
+    }
     val showSkeleton = rememberShowLoading(!ui.ready)
 
     LazyColumn(
@@ -121,7 +125,23 @@ fun HomeScreen(
         ui.safe?.let { safe -> item(key = "safe") { SafeToSpendCard(safe, ui, hidden) } }
 
         if (ui.accounts.isNotEmpty() || ui.savingsTotal.isPositive) {
-            item(key = "accounts") { Accounts(ui.accounts, ui.savingsTotal, hidden) }
+            item(key = "accounts") { Accounts(ui.accounts, ui.savingsTotal, hidden, onSetBalance = { editing = it }) }
+        }
+
+        ui.senderQuestions.forEach { q ->
+            item(key = "sender-" + q.sender) {
+                GlassCard(strong = true, modifier = Modifier.animateItem()) {
+                    Text(
+                        "Messages from \"${q.sender}\" look like ${q.provider.displayName} (for example ${q.example.display(hidden)}). Is this your bank?",
+                        style = MaterialTheme.typography.bodyLarge, color = Kash.colors.text,
+                    )
+                    Spacer(Modifier.height(Space.s))
+                    Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                        KashButton("Yes, it's my bank", { vm.answerSender(q, true) }, Modifier.weight(1f), icon = Lucide.Check)
+                        KashButton("No", { vm.answerSender(q, false) }, style = ButtonStyle.QUIET)
+                    }
+                }
+            }
         }
 
         ui.scams.firstOrNull()?.let { s ->
@@ -242,17 +262,24 @@ private fun SafeToSpendCard(safe: SafeToSpend.Result, ui: HomeUi, hidden: Boolea
 }
 
 @Composable
-private fun Accounts(accounts: List<AccountCard>, savings: com.kash.parser.Money, hidden: Boolean) {
+private fun Accounts(accounts: List<AccountCard>, savings: com.kash.parser.Money, hidden: Boolean, onSetBalance: (AccountCard) -> Unit) {
     val c = Kash.colors
     LazyRow(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
         items(accounts, key = { it.id }) { a ->
             val real = a.realBalance
+            val isBank = a.provider?.isBank == true
             AccountTile(
                 if (a.provider?.isMobileMoney == true) Lucide.Smartphone else Lucide.Landmark,
                 a.name,
-                real?.display(hidden) ?: "—",
+                real?.display(hidden) ?: "Set balance",
                 negative = real != null && real.cents < 0,
-                note = if (a.owed.isPositive) "Fuliza owed ${a.owed.display(hidden)}" else null,
+                note = when {
+                    a.owed.isPositive -> "Fuliza owed ${a.owed.display(hidden)}"
+                    real == null -> "Messages don't state it"
+                    a.estimated -> "Estimated · tap to correct"
+                    else -> null
+                },
+                onClick = if (isBank) ({ onSetBalance(a) }) else null,
             )
         }
         if (savings.isPositive) item(key = "savings") { AccountTile(Lucide.PiggyBank, "Savings", savings.display(hidden)) }
@@ -266,9 +293,15 @@ private fun AccountTile(
     amount: String,
     negative: Boolean = false,
     note: String? = null,
+    onClick: (() -> Unit)? = null,
 ) {
     val c = Kash.colors
-    GlassCard(modifier = Modifier.widthIn(min = 140.dp), contentPadding = PaddingValues(Space.m)) {
+    GlassCard(
+        modifier = Modifier.widthIn(min = 140.dp),
+        contentPadding = PaddingValues(Space.m),
+        onClick = onClick,
+        onClickLabel = if (onClick != null) "Set $name balance" else null,
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(icon, null, Modifier.size(16.dp), tint = c.textMuted)
             Spacer(Modifier.width(6.dp))
@@ -303,4 +336,38 @@ private fun QuestionCard(q: Question, onAnswer: (Category) -> Unit, modifier: Mo
             }
         }
     }
+}
+
+
+/** For banks whose messages don't state a balance: enter it once; Kash keeps it up to date after that. */
+@Composable
+private fun SetBalanceDialog(account: AccountCard, onDismiss: () -> Unit, onSave: (com.kash.parser.Money) -> Unit) {
+    val c = Kash.colors
+    var text by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
+    val parsed = com.kash.parser.Money.parseNumber(text.replace(" ", ""))
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = c.background,
+        title = { Text("${account.name} balance", style = MaterialTheme.typography.titleMedium, color = c.text) },
+        text = {
+            Column {
+                Text(
+                    "Check your balance in the ${account.name} app or USSD, and enter it here. Kash keeps it up to date from your messages after that.",
+                    style = MaterialTheme.typography.bodyMedium, color = c.textMuted,
+                )
+                Spacer(Modifier.height(Space.m))
+                androidx.compose.material3.OutlinedTextField(
+                    value = text,
+                    onValueChange = { v -> text = v.filter { it.isDigit() || it == '.' || it == ',' }.take(14) },
+                    label = { Text("Balance in KSh") },
+                    singleLine = true,
+                    isError = text.isNotEmpty() && parsed == null,
+                    supportingText = { if (text.isNotEmpty() && parsed == null) Text("Enter an amount like 12,500 or 12500.50") },
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
+                )
+            }
+        },
+        confirmButton = { KashButton("Save", { parsed?.let(onSave) }, enabled = parsed != null) },
+        dismissButton = { KashButton("Cancel", onDismiss, style = ButtonStyle.QUIET) },
+    )
 }

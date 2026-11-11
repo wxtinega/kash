@@ -1,0 +1,5 @@
+<resources>
+    <color name="kash_accent">#F86939</color>
+    <color name="kash_bg_light">#F6F5F3</color>
+    <color name="kash_bg_dark">#0E0E10</color>
+</resources>

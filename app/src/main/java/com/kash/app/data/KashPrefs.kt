@@ -30,6 +30,16 @@ class KashPrefs(context: Context) {
         prefs.edit().putStringSet("rejected_senders", rejectedSenders() + sender).apply()
     }
 
+    /** Accounts the user removed: their messages are ignored completely. */
+    fun ignoredProviders(): Set<Provider> =
+        prefs.getStringSet("ignored_providers", emptySet()).orEmpty().mapNotNull { runCatching { Provider.valueOf(it) }.getOrNull() }.toSet()
+
+    fun setTracked(provider: Provider, tracked: Boolean) {
+        val now = prefs.getStringSet("ignored_providers", emptySet()).orEmpty()
+        val next = if (tracked) now - provider.name else now + provider.name
+        prefs.edit().putStringSet("ignored_providers", next).apply()
+    }
+
     /** Balance the user entered, and when. Messages after that time move it up or down. */
     fun manualBalances(): Map<Provider, Pair<Money, LocalDateTime>> =
         Provider.entries.mapNotNull { p ->

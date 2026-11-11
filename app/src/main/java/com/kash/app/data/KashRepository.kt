@@ -83,6 +83,9 @@ data class RepoState(
     val scams: List<ScamWarning> = emptyList(),
     val gaps: List<MissingMoney> = emptyList(),
     val senderQuestions: List<SenderQuestion> = emptyList(),
+    /** Every wallet/bank Kash found messages from, and which ones the user removed. */
+    val seenProviders: List<Provider> = emptyList(),
+    val ignoredProviders: Set<Provider> = emptySet(),
     val fulizaOutstanding: Money = Money.ZERO,
     val lastSync: LocalDateTime? = null,
 )
@@ -101,6 +104,8 @@ interface KashRepository {
     suspend fun answerSender(sender: String, provider: Provider, isMyBank: Boolean)
     /** For accounts whose messages never state a balance (e.g. Co-op deposits). Re-computes. */
     suspend fun setBalance(provider: Provider, balance: Money)
+    /** Remove an account from Kash (its messages are ignored) or bring it back. */
+    suspend fun setTracked(provider: Provider, tracked: Boolean)
 }
 
 /**
@@ -154,6 +159,11 @@ class LocalRepository(
         sync()
     }
 
+    override suspend fun setTracked(provider: Provider, tracked: Boolean) {
+        prefs?.setTracked(provider, tracked)
+        withContext(Dispatchers.Default) { _state.update { build(it.scams) } }
+    }
+
     override suspend fun setBalance(provider: Provider, balance: Money) {
         prefs?.setManualBalance(provider, balance)
         withContext(Dispatchers.Default) { _state.update { build(it.scams) } }
@@ -167,7 +177,11 @@ class LocalRepository(
     }
 
     private fun build(scams: List<ScamWarning>): RepoState {
-        val linked = parsed.mapNotNull { it.linkedCode }.toSet()
+        val ignored = prefs?.ignoredProviders().orEmpty()
+        val all = parsed
+        // Linked codes come from ALL messages, so an M-Pesa → removed-bank deposit still reads as a transfer.
+        val linked = all.mapNotNull { it.linkedCode }.toSet()
+        val parsed = all.filter { it.provider !in ignored }
         // Fund account numbers confirmed by the fund itself (e.g. Co-op MMF "CL42326").
         val fundAccounts = parsed.filter { it.type == TxType.FUND_DEPOSIT || it.type == TxType.FUND_REDEMPTION }
             .mapNotNull { t -> t.accountNumber?.let { it.uppercase() to fundSchemeFor(t.provider) } }.toMap()
@@ -248,7 +262,9 @@ class LocalRepository(
             holdings = holdings,
             scams = scams,
             gaps = gaps,
-            senderQuestions = senderQuestions,
+            senderQuestions = senderQuestions.filter { it.provider !in ignored },
+            seenProviders = all.map { it.provider }.distinct().sortedBy { if (it.isMobileMoney) 0 else 1 },
+            ignoredProviders = ignored,
             fulizaOutstanding = fuliza,
             lastSync = LocalDateTime.now(),
         )

@@ -79,7 +79,12 @@ fun HomeScreen(
     LaunchedEffect(Unit) { vm.messages.collect { snackbar.showSnackbar(it) } }
     var editing by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<AccountCard?>(null) }
     editing?.let { acct ->
-        SetBalanceDialog(acct, onDismiss = { editing = null }, onSave = { m -> acct.provider?.let { vm.setBalance(it, m) }; editing = null })
+        SetBalanceDialog(
+            acct,
+            onDismiss = { editing = null },
+            onSave = { m -> acct.provider?.let { vm.setBalance(it, m) }; editing = null },
+            onStopTracking = { acct.provider?.let { vm.stopTracking(it) }; editing = null },
+        )
     }
     val showSkeleton = rememberShowLoading(!ui.ready)
 
@@ -341,7 +346,12 @@ private fun QuestionCard(q: Question, onAnswer: (Category) -> Unit, modifier: Mo
 
 /** For banks whose messages don't state a balance: enter it once; Kash keeps it up to date after that. */
 @Composable
-private fun SetBalanceDialog(account: AccountCard, onDismiss: () -> Unit, onSave: (com.kash.parser.Money) -> Unit) {
+private fun SetBalanceDialog(
+    account: AccountCard,
+    onDismiss: () -> Unit,
+    onSave: (com.kash.parser.Money) -> Unit,
+    onStopTracking: () -> Unit,
+) {
     val c = Kash.colors
     var text by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
     val parsed = com.kash.parser.Money.parseNumber(text.replace(" ", ""))
@@ -365,6 +375,9 @@ private fun SetBalanceDialog(account: AccountCard, onDismiss: () -> Unit, onSave
                     supportingText = { if (text.isNotEmpty() && parsed == null) Text("Enter an amount like 12,500 or 12500.50") },
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal),
                 )
+                Spacer(Modifier.height(Space.s))
+                // Not your bank (e.g. a one-off message)? Remove it; it can be brought back in Settings.
+                KashButton("Stop tracking ${account.name}", onStopTracking, style = ButtonStyle.QUIET, icon = Lucide.EyeOff)
             }
         },
         confirmButton = { KashButton("Save", { parsed?.let(onSave) }, enabled = parsed != null) },

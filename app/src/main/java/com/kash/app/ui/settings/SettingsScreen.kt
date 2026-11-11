@@ -45,6 +45,9 @@ import kotlinx.coroutines.flow.Flow
 fun SettingsScreen(
     settings: UserSettings,
     online: Flow<Boolean>,
+    seenProviders: List<com.kash.parser.Provider>,
+    ignoredProviders: Set<com.kash.parser.Provider>,
+    onTracked: (com.kash.parser.Provider, Boolean) -> Unit,
     onTheme: (ThemeMode) -> Unit,
     onHideAmounts: (Boolean) -> Unit,
     contentPadding: PaddingValues,
@@ -72,6 +75,26 @@ fun SettingsScreen(
                     Pill("System", settings.themeMode == ThemeMode.SYSTEM, { onTheme(ThemeMode.SYSTEM) }, icon = Lucide.Monitor)
                     Pill("Light", settings.themeMode == ThemeMode.LIGHT, { onTheme(ThemeMode.LIGHT) }, icon = Lucide.Sun)
                     Pill("Dark", settings.themeMode == ThemeMode.DARK, { onTheme(ThemeMode.DARK) }, icon = Lucide.Moon)
+                }
+            }
+        }
+        item {
+            GlassCard(contentPadding = PaddingValues(horizontal = Space.l, vertical = Space.s)) {
+                Text("Accounts", style = MaterialTheme.typography.titleSmall, color = c.text)
+                Text(
+                    if (seenProviders.isEmpty()) "Accounts appear here once Kash finds messages from them."
+                    else "Kash only shows accounts it found messages from. Switch off any you don't want tracked; their messages will be ignored.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.textMuted,
+                )
+                seenProviders.forEach { p ->
+                    ToggleRow(
+                        icon = if (p.isMobileMoney) Lucide.Smartphone else Lucide.Landmark,
+                        title = p.displayName,
+                        body = if (p in ignoredProviders) "Not tracked" else "Tracked",
+                        checked = p !in ignoredProviders,
+                        onChange = { onTracked(p, it) },
+                    )
                 }
             }
         }

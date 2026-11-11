@@ -86,6 +86,12 @@ class HomeViewModel(private val repo: KashRepository) : ViewModel() {
         }
     }
 
+    fun stopTracking(provider: Provider) {
+        viewModelScope.launch {
+            try { repo.setTracked(provider, false) } catch (t: Throwable) { _messages.tryEmit(HumanErrors.message(t)) }
+        }
+    }
+
     fun setBalance(provider: Provider, balance: Money) {
         viewModelScope.launch {
             try { repo.setBalance(provider, balance) } catch (t: Throwable) { _messages.tryEmit(HumanErrors.message(t)) }

@@ -36,6 +36,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -139,9 +140,13 @@ fun KashNav(
                 composable(Tab.REPORT.route) { ReportScreen(reportVm, settings.hideAmounts, snackbar, padding) }
                 composable(Tab.SAVINGS.route) { SavingsScreen(app.repository, settings.hideAmounts, padding) }
                 composable(Tab.SETTINGS.route) {
+                    val repoState by app.repository.state.collectAsStateWithLifecycle()
                     SettingsScreen(
                         settings = settings,
                         online = app.connectivity.isOnline,
+                        seenProviders = repoState.seenProviders,
+                        ignoredProviders = repoState.ignoredProviders,
+                        onTracked = { p, on -> scope.launch { app.repository.setTracked(p, on) } },
                         onTheme = { scope.launch { app.settings.setTheme(it) } },
                         onHideAmounts = { scope.launch { app.settings.setHideAmounts(it) } },
                         contentPadding = padding,

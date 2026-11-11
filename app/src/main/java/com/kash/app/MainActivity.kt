@@ -18,9 +18,16 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kash.app.core.UserSettings
+import androidx.compose.runtime.rememberCoroutineScope
 import com.kash.app.ui.KashNav
+import com.kash.app.ui.components.KashBackground
+import com.kash.app.ui.consent.ConsentScreen
+import com.kash.app.ui.consent.PRIVACY_POLICY_VERSION
+import kotlinx.coroutines.launch
 import com.kash.app.ui.lock.LockScreen
 import com.kash.app.ui.theme.KashTheme
+
+private enum class Stage { LOADING, CONSENT, LOCKED, OPEN }
 
 /** FragmentActivity because the biometric prompt needs it. */
 class MainActivity : FragmentActivity() {
@@ -37,15 +44,31 @@ class MainActivity : FragmentActivity() {
 
         val app = application as KashApp
         setContent {
-            val settings by app.settings.settings.collectAsStateWithLifecycle(initialValue = UserSettings())
+            // null until stored settings are read (a few ms), so the consent screen never flashes for people who agreed.
+            val loaded by app.settings.settings.collectAsStateWithLifecycle<UserSettings?>(initialValue = null)
+            val settings = loaded ?: UserSettings()
             var unlocked by rememberSaveable { mutableStateOf(false) }
+            val scope = rememberCoroutineScope()
             KashTheme(mode = settings.themeMode) {
+                val stage = when {
+                    loaded == null -> Stage.LOADING
+                    settings.acceptedPolicyVersion < PRIVACY_POLICY_VERSION -> Stage.CONSENT
+                    !unlocked -> Stage.LOCKED
+                    else -> Stage.OPEN
+                }
                 AnimatedContent(
-                    targetState = unlocked,
+                    targetState = stage,
                     transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(120)) },
-                    label = "lock",
-                ) { open ->
-                    if (open) KashNav(app, settings) else LockScreen(onUnlocked = { unlocked = true })
+                    label = "stage",
+                ) { s ->
+                    when (s) {
+                        Stage.LOADING -> KashBackground {}
+                        Stage.CONSENT -> ConsentScreen(onAgree = {
+                            scope.launch { app.settings.acceptPolicy(PRIVACY_POLICY_VERSION) }
+                        })
+                        Stage.LOCKED -> LockScreen(onUnlocked = { unlocked = true })
+                        Stage.OPEN -> KashNav(app, settings)
+                    }
                 }
             }
         }

@@ -94,7 +94,7 @@ fun SettingsScreen(
                     Column(Modifier.weight(1f)) {
                         Text("Private by design", style = MaterialTheme.typography.titleSmall, color = c.text)
                         Text(
-                            "Your messages are read and stored only on this phone, encrypted. Nothing is uploaded.",
+                            "Your messages are read and stored only on this phone. Nothing is uploaded. Privacy policy version 1, agreed.",
                             style = MaterialTheme.typography.bodySmall,
                             color = c.textMuted,
                         )

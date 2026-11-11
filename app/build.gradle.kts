@@ -8,16 +8,37 @@ android {
     namespace = "com.kash.app"
     compileSdk = 35
 
+    // CI passes -PbuildNumber so every published build installs as an update over the last one.
+    val buildNumber = (project.findProperty("buildNumber") as String?)?.toIntOrNull() ?: 1
+
     defaultConfig {
         applicationId = "com.kash.app"
         minSdk = 30 // Android 11+
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = buildNumber
+        versionName = "0.1.$buildNumber"
     }
+
+    // The signing key never lives in the repository. CI decodes it from an encrypted GitHub secret
+    // into a temp file and passes its path here. Without it, release builds fall back to the debug key.
+    val keystorePath: String? = System.getenv("KASH_KEYSTORE_PATH")
+    signingConfigs {
+        if (keystorePath != null) {
+            create("kash") {
+                storeFile = file(keystorePath)
+                storePassword = System.getenv("KASH_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("KASH_KEY_ALIAS") ?: "kash"
+                keyPassword = System.getenv("KASH_KEYSTORE_PASSWORD")
+            }
+        }
+    }
+
+    // The privacy policy shown in the app is the same file published in the repository.
+    sourceSets["main"].assets.srcDir("../legal")
 
     buildTypes {
         release {
+            signingConfig = if (keystorePath != null) signingConfigs.getByName("kash") else signingConfigs.getByName("debug")
             // Obfuscation + shrinking: harder to reverse-engineer, smaller download.
             isMinifyEnabled = true
             isShrinkResources = true

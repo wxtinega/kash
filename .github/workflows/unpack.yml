@@ -15,7 +15,7 @@ jobs:
   unpack:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Replace source with the uploaded zip
         run: |
@@ -35,4 +35,6 @@ jobs:
       - name: Start the build
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh workflow run build.yml --ref main
+        run: |
+          sleep 15  # let GitHub register the new commit before the build checks it out
+          gh workflow run build.yml --ref main

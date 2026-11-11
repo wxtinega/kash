@@ -74,4 +74,4 @@ not financial advice.
 ## 11. Changes and contact
 If this policy changes, Kash will show you the new version and ask you to agree again before
 you continue.
-Questions or requests: contact the developer, T.I, at **[CONTACT EMAIL]**.
+Questions or requests: contact the developer, T.I, at **williamstinega@gmail.com**.

@@ -18,7 +18,9 @@ import java.util.concurrent.TimeUnit
 class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result = try {
-        (applicationContext as KashApp).repository.sync()
+        val repo = (applicationContext as KashApp).repository
+        repo.sync()
+        ReportNotifier.maybeNotify(applicationContext, repo.state.value)
         Result.success()
     } catch (t: Throwable) {
         // Transient problems (e.g. database busy): let WorkManager retry with back-off.

@@ -19,7 +19,10 @@ import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kash.app.core.UserSettings
 import androidx.compose.runtime.rememberCoroutineScope
+import android.content.Intent
 import com.kash.app.data.SmsInbox
+import com.kash.app.sync.ReportNotifier
+import java.time.YearMonth
 import com.kash.app.ui.KashNav
 import com.kash.app.ui.permissions.SmsAccessScreen
 import com.kash.app.ui.components.KashBackground
@@ -33,10 +36,28 @@ private enum class Stage { LOADING, CONSENT, LOCKED, SMS_ACCESS, OPEN }
 
 private const val KEY_UNLOCKED = "unlocked"
 
+/** From the monthly notification: open the report, or save it as a PDF. Handled after unlocking. */
+data class OpenRequest(val pdf: Boolean, val month: YearMonth)
+
 /** FragmentActivity because the biometric prompt needs it. */
 class MainActivity : FragmentActivity() {
     /** Re-checked on every resume: the user may have granted SMS access in App info meanwhile. */
     private val smsGranted = mutableStateOf(false)
+
+    private val openRequest = mutableStateOf<OpenRequest?>(null)
+
+    private fun readIntent(i: Intent?) {
+        val open = i?.getStringExtra(ReportNotifier.EXTRA_OPEN) ?: return
+        val month = runCatching { YearMonth.parse(i.getStringExtra(ReportNotifier.EXTRA_MONTH)) }.getOrNull()
+            ?: YearMonth.now().minusMonths(1)
+        openRequest.value = OpenRequest(pdf = open == ReportNotifier.OPEN_PDF, month = month)
+        i.removeExtra(ReportNotifier.EXTRA_OPEN) // don't repeat on rotation
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        readIntent(intent)
+    }
 
     /** Unlocked only while Kash is on screen. Leaving it (another app, home, screen off) locks it again. */
     private val unlocked = mutableStateOf(false)
@@ -67,6 +88,7 @@ class MainActivity : FragmentActivity() {
         smsGranted.value = SmsInbox.hasPermission(this)
         // Stay unlocked across a rotation only; a fresh start is always locked.
         unlocked.value = savedInstanceState?.getBoolean(KEY_UNLOCKED) == true
+        if (savedInstanceState == null) readIntent(intent)
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
@@ -109,7 +131,12 @@ class MainActivity : FragmentActivity() {
                             },
                             onSkip = { skippedSms = true },
                         )
-                        Stage.OPEN -> KashNav(app, settings, onRequestSms = { skippedSms = false })
+                        Stage.OPEN -> KashNav(
+                            app, settings,
+                            onRequestSms = { skippedSms = false },
+                            openRequest = openRequest.value,
+                            onOpenHandled = { openRequest.value = null },
+                        )
                     }
                 }
             }

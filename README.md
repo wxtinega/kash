@@ -57,6 +57,14 @@ the user's earlier answer → transaction type → built-in directory of Kenyan 
 dismisses it and applies to every future payment to the same place. At most 3 a day, none at night,
 none under KSh 50 (those wait in the app's list).
 
+## Monthly report
+
+`MonthlyReports.build` (core/insights): money in (real income only), spent (incl. transaction costs), saved,
+costs, categories ranked, top payees, daily series, month-on-month change and plain-language highlights.
+The Report tab shows it with charts; "Download as PDF" saves an A4 PDF to Downloads. On the 1st–3rd of each
+month a notification ("Your October summary is ready") offers View or Download PDF, with no amounts on it.
+M-Pesa shows Fuliza owed as a negative balance.
+
 ## Savings & investments
 
 `SchemeRegistry` covers ~30 money market funds, Mansa-X, M-Shwari / lock savings, KCB M-PESA, SACCOs,

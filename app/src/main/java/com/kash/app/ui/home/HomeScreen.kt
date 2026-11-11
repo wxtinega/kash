@@ -246,10 +246,13 @@ private fun Accounts(accounts: List<AccountCard>, savings: com.kash.parser.Money
     val c = Kash.colors
     LazyRow(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
         items(accounts, key = { it.id }) { a ->
+            val real = a.realBalance
             AccountTile(
-                if (a.provider == Provider.MPESA) Lucide.Smartphone else Lucide.Landmark,
+                if (a.provider?.isMobileMoney == true) Lucide.Smartphone else Lucide.Landmark,
                 a.name,
-                a.balance?.display(hidden) ?: "—",
+                real?.display(hidden) ?: "—",
+                negative = real != null && real.cents < 0,
+                note = if (a.owed.isPositive) "Fuliza owed ${a.owed.display(hidden)}" else null,
             )
         }
         if (savings.isPositive) item(key = "savings") { AccountTile(Lucide.PiggyBank, "Savings", savings.display(hidden)) }
@@ -257,7 +260,13 @@ private fun Accounts(accounts: List<AccountCard>, savings: com.kash.parser.Money
 }
 
 @Composable
-private fun AccountTile(icon: androidx.compose.ui.graphics.vector.ImageVector, name: String, amount: String) {
+private fun AccountTile(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    name: String,
+    amount: String,
+    negative: Boolean = false,
+    note: String? = null,
+) {
     val c = Kash.colors
     GlassCard(modifier = Modifier.widthIn(min = 140.dp), contentPadding = PaddingValues(Space.m)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -266,7 +275,8 @@ private fun AccountTile(icon: androidx.compose.ui.graphics.vector.ImageVector, n
             Text(name, style = MaterialTheme.typography.labelMedium, color = c.textMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Spacer(Modifier.height(Space.xs))
-        Text(amount, style = MaterialTheme.typography.titleMedium, color = c.text, maxLines = 1)
+        Text(amount, style = MaterialTheme.typography.titleMedium, color = if (negative) c.negative else c.text, maxLines = 1)
+        if (note != null) Text(note, style = MaterialTheme.typography.bodySmall, color = c.textMuted, maxLines = 1)
     }
 }
 

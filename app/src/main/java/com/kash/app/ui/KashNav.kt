@@ -50,7 +50,12 @@ import com.kash.app.ui.components.pressable
 import com.kash.app.ui.home.HomeScreen
 import com.kash.app.ui.home.HomeViewModel
 import com.kash.app.ui.icons.Lucide
+import com.kash.app.OpenRequest
+import com.kash.app.ui.report.ReportScreen
+import com.kash.app.ui.report.ReportViewModel
 import com.kash.app.ui.savings.SavingsScreen
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalContext
 import com.kash.app.ui.settings.SettingsScreen
 import com.kash.app.ui.theme.Kash
 import com.kash.app.ui.theme.Space
@@ -59,6 +64,7 @@ import kotlinx.coroutines.launch
 private enum class Tab(val route: String, val label: String, val icon: ImageVector) {
     HOME("home", "Home", Lucide.House),
     ACTIVITY("activity", "Activity", Lucide.Receipt),
+    REPORT("report", "Report", Lucide.ChartNoAxesColumn),
     SAVINGS("savings", "Savings", Lucide.PiggyBank),
     SETTINGS("settings", "Settings", Lucide.Settings),
 }
@@ -68,7 +74,13 @@ private enum class Tab(val route: String, val label: String, val icon: ImageVect
  * Each tab keeps its scroll position and search text (saveState/restoreState).
  */
 @Composable
-fun KashNav(app: KashApp, settings: UserSettings, onRequestSms: () -> Unit) {
+fun KashNav(
+    app: KashApp,
+    settings: UserSettings,
+    onRequestSms: () -> Unit,
+    openRequest: OpenRequest? = null,
+    onOpenHandled: () -> Unit = {},
+) {
     val nav = rememberNavController()
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -79,6 +91,17 @@ fun KashNav(app: KashApp, settings: UserSettings, onRequestSms: () -> Unit) {
         popUpTo(nav.graph.findStartDestination().id) { saveState = true }
         launchSingleTop = true
         restoreState = true
+    }
+
+    // Shared so the notification can point it at a month (and start a PDF) before the tab opens.
+    val reportVm: ReportViewModel = viewModel { ReportViewModel(app.repository) }
+    val context = LocalContext.current
+    LaunchedEffect(openRequest) {
+        val req = openRequest ?: return@LaunchedEffect
+        reportVm.show(req.month)
+        go(Tab.REPORT)
+        if (req.pdf) reportVm.exportPdf(context, req.month)
+        onOpenHandled()
     }
 
     KashBackground {
@@ -113,6 +136,7 @@ fun KashNav(app: KashApp, settings: UserSettings, onRequestSms: () -> Unit) {
                     val vm: ActivityViewModel = viewModel { ActivityViewModel(app.repository) }
                     ActivityScreen(vm, settings.hideAmounts, padding)
                 }
+                composable(Tab.REPORT.route) { ReportScreen(reportVm, settings.hideAmounts, snackbar, padding) }
                 composable(Tab.SAVINGS.route) { SavingsScreen(app.repository, settings.hideAmounts, padding) }
                 composable(Tab.SETTINGS.route) {
                     SettingsScreen(

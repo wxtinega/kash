@@ -48,7 +48,18 @@ data class TxItem(
 
 data class Question(val txId: String, val key: MerchantKey?, val prompt: String, val choices: List<Category>)
 
-data class AccountCard(val id: String, val name: String, val provider: Provider?, val balance: Money?, val updatedAt: LocalDateTime?)
+data class AccountCard(
+    val id: String,
+    val name: String,
+    val provider: Provider?,
+    /** Balance as the last message stated it (never below zero for M-Pesa). */
+    val balance: Money?,
+    val updatedAt: LocalDateTime?,
+    /** Fuliza still owed on this wallet. What you really have = balance − owed, which can be negative. */
+    val owed: Money = Money.ZERO,
+) {
+    val realBalance: Money? get() = balance?.let { it - owed }
+}
 
 data class ScamWarning(val sender: String, val reasons: List<ScamSignal>, val at: LocalDateTime)
 
@@ -133,7 +144,14 @@ class LocalRepository(
         val investEvents = mutableMapOf<String, MutableList<InvestmentEvent>>()
 
         for (tx in parsed) {
-            if (tx.type == TxType.FULIZA_LOAN) continue // shown via Fuliza total, not as spending
+            if (tx.type == TxType.FULIZA_LOAN) {
+                // The borrowed amount isn't spending (it's spent by the payment it covered); its fee is.
+                if (tx.fee.isPositive) items += TxItem(
+                    id = tx.code + "-fee", title = "Fuliza access fee", subtitle = "M-Pesa",
+                    amount = tx.fee, incoming = false, category = Category.FEES, at = tx.occurredAt, provider = tx.provider,
+                )
+                continue
+            }
             var category: Category? = null
             when (val p = categorizer.place(tx)) {
                 is Placement.Known -> {
@@ -160,21 +178,30 @@ class LocalRepository(
             )
         }
 
-        val accounts = parsed.filter { it.balanceAfter != null }
-            .groupBy { it.provider }
-            .map { (provider, list) ->
-                val latest = list.maxBy { it.occurredAt }
-                AccountCard(provider.name, provider.displayName, provider, latest.balanceAfter, latest.occurredAt)
-            }
-            .sortedBy { if (it.provider == Provider.MPESA) 0 else 1 }
-
         val gaps = parsed.groupBy { it.provider }.flatMap { (provider, list) ->
             BalanceChain.check(list).map { MissingMoney(provider.displayName, it.difference, it.previous.occurredAt, it.tx.occurredAt) }
         }
 
-        val fuliza = parsed.filter { it.fulizaOutstanding != null }.maxByOrNull { it.occurredAt }
-            ?.let { last -> if (parsed.any { it.type == TxType.FULIZA_REPAY && it.occurredAt > last.occurredAt }) Money.ZERO else last.fulizaOutstanding }
-            ?: Money.ZERO
+        // Fuliza owed: each loan message states the new total owed; each repayment reduces it.
+        var fuliza = Money.ZERO
+        for (t in parsed.sortedWith(compareBy<Transaction> { it.occurredAt }.thenBy { it.receivedAt })) {
+            when (t.type) {
+                TxType.FULIZA_LOAN -> fuliza = t.fulizaOutstanding ?: (fuliza + t.amount + t.fee)
+                TxType.FULIZA_REPAY -> fuliza = (fuliza - t.amount).let { if (it.cents < 0) Money.ZERO else it }
+                else -> Unit
+            }
+        }
+
+        val accounts = parsed.filter { it.balanceAfter != null }
+            .groupBy { it.provider }
+            .map { (provider, list) ->
+                val latest = list.maxBy { it.occurredAt }
+                AccountCard(
+                    provider.name, provider.displayName, provider, latest.balanceAfter, latest.occurredAt,
+                    owed = if (provider == Provider.MPESA) fuliza else Money.ZERO,
+                )
+            }
+            .sortedBy { if (it.provider == Provider.MPESA) 0 else 1 }
 
         val today = LocalDate.now()
         val holdings = investEvents.mapNotNull { (id, events) ->

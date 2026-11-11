@@ -48,6 +48,11 @@ class Categorizer(
     fun place(tx: Transaction): Placement {
         transferEvidence(tx)?.let { return Placement.Known(Categorized(Category.TRANSFER, Source.LINKED_TRANSFER, it)) }
 
+        // An answer given for this exact payment always wins.
+        learned.get(MerchantKey.single(tx))?.let {
+            return Placement.Known(Categorized(it, Source.LEARNED, "You marked this payment as ${it.label}"))
+        }
+
         val key = MerchantKey.of(tx)
         if (key != null) {
             (learned.get(key) ?: key.parent?.let(learned::get))?.let {
@@ -60,7 +65,8 @@ class Categorizer(
         byType(tx)?.let { return Placement.Known(it) }
 
         // Business directory and keywords only for businesses, never for people.
-        val isBusiness = tx.type in setOf(TxType.TILL, TxType.PAYBILL, TxType.BANK_DEBIT)
+        val unnamed = tx.counterparty?.contains("not named", ignoreCase = true) == true
+        val isBusiness = tx.type in setOf(TxType.TILL, TxType.PAYBILL, TxType.BANK_DEBIT) && !unnamed
         val name = if (isBusiness) tx.counterparty?.let(MerchantKey::normalizeName).orEmpty() else ""
         if (name.isNotEmpty()) Directory.lookup(name)?.let { (cat, matched) ->
             return Placement.Known(Categorized(cat, Source.BUILT_IN, "$matched is a known ${cat.label.lowercase()} business"))

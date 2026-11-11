@@ -28,7 +28,7 @@ internal object Fields {
     private val FULIZA_OUTSTANDING = Regex("""outstanding amount is\s*$CUR$NUM""", RegexOption.IGNORE_CASE)
 
     private val DATE_TIME = Regex(
-        """on\s*(\d{1,2}/\d{1,2}/(?:\d{4}|\d{2}))\s*at\s*(\d{1,2}:\d{2})\s*([AP]M)""",
+        """on\s*(\d{1,2}/\d{1,2}/(?:\d{4}|\d{2}))\s*(?:at)?\s*(\d{1,2}:\d{2})\s*([AP]M)""",
         RegexOption.IGNORE_CASE,
     )
     private val FMT_SHORT = DateTimeFormatter.ofPattern("d/M/yy h:mm a", Locale.ENGLISH)

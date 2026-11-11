@@ -35,7 +35,13 @@ value class MerchantKey(val value: String) {
             }
         }
 
+        /** Per-transaction key, for payments with no identifiable payee (answers apply to that one only). */
+        fun single(tx: Transaction) = MerchantKey("tx:${tx.code}")
+
         fun of(tx: Transaction): MerchantKey? {
+            // "Lipa na M-Pesa" with no shop named: every such payment would share one key, so one answer
+            // ("Food") would wrongly file all of them. Treat each as its own.
+            if (tx.counterparty?.contains("not named", ignoreCase = true) == true) return null
             val name = tx.counterparty?.let(::normalizeName)?.takeIf { it.isNotEmpty() }
             return when (tx.type) {
                 TxType.SENT, TxType.RECEIVED ->

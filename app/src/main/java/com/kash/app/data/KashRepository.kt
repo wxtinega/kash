@@ -120,7 +120,7 @@ class LocalRepository(
 
     override suspend fun answer(txId: String, category: Category) = withContext(Dispatchers.Default) {
         val tx = parsed.firstOrNull { it.code == txId } ?: return@withContext
-        val key = MerchantKey.of(tx) ?: MerchantKey("tx:${tx.code}")
+        val key = MerchantKey.of(tx) ?: MerchantKey.single(tx)
         learned.put(key, category)
         _state.update { build(it.scams) }
     }

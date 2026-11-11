@@ -68,6 +68,10 @@ class BankParser(
     fun parse(provider: Provider, sender: String, body: String, fallbackTime: LocalDateTime): ParseOutcome {
         if (FAILED.containsMatchIn(body)) return ParseOutcome.Ignored(IgnoreReason.FAILED_TRANSACTION)
 
+        // A bank telling you an organisation paid you BY M-PESA (e.g. Citi on behalf of a university).
+        // The money arrives in M-Pesa, which sends its own message: counting this too would double it.
+        if (PAID_TO_YOUR_MPESA.containsMatchIn(body)) return ParseOutcome.Ignored(IgnoreReason.NOT_A_TRANSACTION)
+
         val balance = BALANCE.find(body)?.let { Money.parseNumber(it.groupValues[1]) }
         val bankRef = REFERENCE.find(body)?.groupValues?.get(1)
         val mpesaRef = MPESA_REF.find(body)?.groupValues?.get(1)
@@ -178,8 +182,9 @@ class BankParser(
         private val DEBIT = Regex("""\b(debited|withdrawn|withdrawal|paid to|payment to|purchase|spent|sent to|transferred to)\b""", RegexOption.IGNORE_CASE)
         /** Bank's own reference; "M-PESA Ref" is captured separately as the linked M-Pesa code. */
         private val REFERENCE = Regex("""(?<!PESA )\bRef(?:erence)?\.?\s*(?:No\.?)?\s*:?\s*([A-Z0-9]{6,20})\b""", RegexOption.IGNORE_CASE)
-        private val MPESA_REF = Regex("""M-?PESA Ref\.?\s*:?\s*([A-Z][A-Z0-9]{9})\b""", RegexOption.IGNORE_CASE)
+        private val MPESA_REF = Regex("""M-?PESA Ref\.?\s*(?:No\.?)?\s*:?\s*([A-Z][A-Z0-9]{9})\b""", RegexOption.IGNORE_CASE)
         private val FAILED = Regex("""\b(failed|declined|unsuccessful|insufficient funds|reversed)\b""", RegexOption.IGNORE_CASE)
+        private val PAID_TO_YOUR_MPESA = Regex("""You have received\s*(?:Ksh|KES|Kshs)\.?\s?[\d,.]+ from .+? with M-?Pesa Ref""", RegexOption.IGNORE_CASE)
 
         /** Co-op Bank formats, taken from real messages (Nov 2026). */
         val COOP_RULES = listOf(

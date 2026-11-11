@@ -235,3 +235,24 @@ class FeedbackRound1InsightsTest {
         assertTrue(Category.MONEY_IN !in OUTGOING_CATEGORIES)
     }
 }
+
+class RealAirtelInsightsTest {
+    private fun airtel(body: String) =
+        (com.kash.parser.SmsPipeline().process(com.kash.parser.RawSms("AirtelMoney", body, java.time.Instant.parse("2026-11-11T08:00:00Z"))) as com.kash.parser.ParseOutcome.Parsed).tx
+
+    @Test fun airtelBundleIsBills() {
+        val p = Categorizer().place(airtel("56705560258 Confirmed. Bundle purchase successful of Ksh 15 via Airtel Networks Kenya Ltd on 29/10/26 at 07:42 PM. Bal: Ksh 90.0."))
+        assertEquals(Category.UTILITIES, (p as Placement.Known).result.category)
+    }
+
+    @Test fun unnamedLipaNaMpesaAnswersApplyToThatPaymentOnly() {
+        val c = Categorizer()
+        val first = airtel("73STEWM8DAH. Ksh 60 paid to Lipa Na Mpesa via Airtel Money on 25/10/26 at 04:04 PM. Fee: Ksh 0. Bal: Ksh 15.0. MPESA ID: UJPS017D58")
+        val second = airtel("83STEWM8DAX. Ksh 200 paid to Lipa Na Mpesa via Airtel Money on 26/10/26 at 09:00 AM. Fee: Ksh 0. Bal: Ksh 30.0. MPESA ID: UJPS017D99")
+        val ask = c.place(first) as Placement.Ask
+        assertEquals(null, ask.key)
+        c.learn(MerchantKey.single(first), Category.FOOD)
+        assertEquals(Category.FOOD, (c.place(first) as Placement.Known).result.category)
+        assertTrue(c.place(second) is Placement.Ask) // not auto-filed as Food
+    }
+}

@@ -55,7 +55,6 @@ class MainActivity : FragmentActivity() {
     override fun onResume() {
         super.onResume()
         smsGranted.value = SmsInbox.hasPermission(this)
-        unlocked.value = savedInstanceState?.getBoolean(KEY_UNLOCKED) == true
         // Pick up anything that arrived while Kash was in the background.
         val app = application as KashApp
         app.appScope.launch { runCatching { app.repository.sync() } }
@@ -66,6 +65,8 @@ class MainActivity : FragmentActivity() {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         smsGranted.value = SmsInbox.hasPermission(this)
+        // Stay unlocked across a rotation only; a fresh start is always locked.
+        unlocked.value = savedInstanceState?.getBoolean(KEY_UNLOCKED) == true
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),

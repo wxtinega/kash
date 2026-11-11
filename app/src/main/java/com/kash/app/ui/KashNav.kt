@@ -68,7 +68,7 @@ private enum class Tab(val route: String, val label: String, val icon: ImageVect
  * Each tab keeps its scroll position and search text (saveState/restoreState).
  */
 @Composable
-fun KashNav(app: KashApp, settings: UserSettings) {
+fun KashNav(app: KashApp, settings: UserSettings, onRequestSms: () -> Unit) {
     val nav = rememberNavController()
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -104,6 +104,7 @@ fun KashNav(app: KashApp, settings: UserSettings) {
                         hidden = settings.hideAmounts,
                         onToggleHidden = { scope.launch { app.settings.setHideAmounts(!settings.hideAmounts) } },
                         onSeeAll = { go(Tab.ACTIVITY) },
+                        onRequestSms = onRequestSms,
                         snackbar = snackbar,
                         contentPadding = padding,
                     )

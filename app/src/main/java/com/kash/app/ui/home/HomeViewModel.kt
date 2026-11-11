@@ -25,6 +25,9 @@ import java.time.LocalDate
 
 data class HomeUi(
     val ready: Boolean = false,
+    val smsAccess: Boolean = true,
+    /** True once at least one real money message has been found. No data = no made-up figures. */
+    val hasData: Boolean = false,
     val netWorth: Money = Money.ZERO,
     val accounts: List<AccountCard> = emptyList(),
     val savingsTotal: Money = Money.ZERO,
@@ -55,10 +58,13 @@ class HomeViewModel(private val repo: KashRepository) : ViewModel() {
         val recent = s.transactions.take(6).map { t -> opt[t.id]?.let { t.copy(category = it) } ?: t }
         HomeUi(
             ready = s.ready,
+            smsAccess = s.smsAccess,
+            hasData = s.accounts.isNotEmpty() || s.transactions.isNotEmpty(),
             netWorth = balances + savings - s.fulizaOutstanding,
             accounts = s.accounts,
             savingsTotal = savings,
-            safe = if (s.ready) SafeToSpend.compute(
+            // Only meaningful with real balances; otherwise it would show a made-up "money is short".
+            safe = if (s.ready && s.accounts.isNotEmpty()) SafeToSpend.compute(
                 SafeToSpend.Input(balances, Money.ZERO, Money.ZERO, s.fulizaOutstanding, today, nextIncome, spentToday),
             ) else null,
             nextIncome = nextIncome,

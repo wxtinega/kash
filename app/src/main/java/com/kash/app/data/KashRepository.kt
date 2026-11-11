@@ -7,6 +7,7 @@ import com.kash.insights.HoldingSummary
 import com.kash.insights.InMemoryLearnedRules
 import com.kash.insights.InvestmentEvent
 import com.kash.insights.InvestmentTracker
+import com.kash.insights.LearnedRules
 import com.kash.insights.MerchantKey
 import com.kash.insights.Placement
 import com.kash.insights.SchemeRegistry
@@ -25,6 +26,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -50,8 +53,10 @@ data class ScamWarning(val sender: String, val reasons: List<ScamSignal>, val at
 data class MissingMoney(val account: String, val amount: Money, val between: LocalDateTime, val and: LocalDateTime)
 
 data class RepoState(
-    /** False only until the very first local read completes (milliseconds). */
+    /** False only until the very first local read completes. */
     val ready: Boolean = false,
+    /** Whether Kash may read SMS. When false, every screen shows how to allow it instead of numbers. */
+    val smsAccess: Boolean = false,
     val accounts: List<AccountCard> = emptyList(),
     val transactions: List<TxItem> = emptyList(),
     val questions: List<Question> = emptyList(),
@@ -75,20 +80,25 @@ interface KashRepository {
 }
 
 /**
- * Runs the real parser + categoriser over a set of messages. In this build the messages are
- * demo samples; the next step swaps in the phone's SMS inbox and the encrypted database.
+ * Runs the parser + categoriser over the user's own SMS. Nothing is invented: with no permission
+ * or no money messages, the state is empty and the UI says so.
  */
 class LocalRepository(
-    private val messages: suspend () -> List<RawSms> = { DemoMessages.all() },
+    /** Reads the phone's messages (empty without permission). */
+    private val messages: suspend () -> List<RawSms>,
+    private val hasAccess: () -> Boolean,
+    private val learned: LearnedRules = InMemoryLearnedRules(),
 ) : KashRepository {
 
     private val _state = MutableStateFlow(RepoState())
     override val state: StateFlow<RepoState> = _state.asStateFlow()
 
-    private val learned = InMemoryLearnedRules()
     private var parsed: List<Transaction> = emptyList()
+    private val lock = Mutex() // a new SMS and an app resume can both trigger sync at once
 
-    override suspend fun sync() = withContext(Dispatchers.Default) {
+    override suspend fun sync(): Unit = lock.withLock { withContext(Dispatchers.Default) { syncLocked() } }
+
+    private suspend fun syncLocked() {
         val pipeline = SmsPipeline()
         val txs = mutableListOf<Transaction>()
         val scams = mutableListOf<ScamWarning>()
@@ -101,7 +111,9 @@ class LocalRepository(
             }
         }
         parsed = txs.sortedByDescending { it.occurredAt }
-        _state.value = build(scams)
+        // Only recent scam attempts are worth a warning; months-old ones are just noise.
+        val recent = LocalDateTime.now().minusDays(SCAM_WARNING_DAYS)
+        _state.value = build(scams.filter { it.at >= recent }.sortedByDescending { it.at })
     }
 
     override suspend fun answer(txId: String, category: Category) = withContext(Dispatchers.Default) {
@@ -168,6 +180,7 @@ class LocalRepository(
 
         return RepoState(
             ready = true,
+            smsAccess = hasAccess(),
             accounts = accounts,
             transactions = items,
             questions = questions,
@@ -177,6 +190,10 @@ class LocalRepository(
             fulizaOutstanding = fuliza,
             lastSync = LocalDateTime.now(),
         )
+    }
+
+    private companion object {
+        const val SCAM_WARNING_DAYS = 7L
     }
 
     private fun label(type: TxType) = when (type) {

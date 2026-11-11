@@ -69,6 +69,7 @@ fun HomeScreen(
     hidden: Boolean,
     onToggleHidden: () -> Unit,
     onSeeAll: () -> Unit,
+    onRequestSms: () -> Unit,
     snackbar: SnackbarHostState,
     contentPadding: PaddingValues,
 ) {
@@ -88,6 +89,30 @@ fun HomeScreen(
 
         if (!ui.ready) {
             if (showSkeleton) items(4) { SkeletonRow() }
+            return@LazyColumn
+        }
+
+        if (!ui.smsAccess) {
+            item(key = "no-access") {
+                EmptyState(
+                    Lucide.Lock,
+                    "Kash can't see your messages yet",
+                    "Allow access to your SMS and Kash will build your balances and spending from your M-Pesa and bank messages. Everything stays on this phone.",
+                    actionLabel = "Allow access",
+                    onAction = onRequestSms,
+                )
+            }
+            return@LazyColumn
+        }
+
+        if (!ui.hasData) {
+            item(key = "no-data") {
+                EmptyState(
+                    Lucide.Inbox,
+                    "No money messages found yet",
+                    "Kash looked through the last 6 months of messages and found no M-Pesa or bank transactions. New ones will appear here as they arrive.",
+                )
+            }
             return@LazyColumn
         }
 
@@ -129,15 +154,7 @@ fun HomeScreen(
                 if (ui.recent.isNotEmpty()) KashButton("See all", onSeeAll, style = ButtonStyle.QUIET, icon = Lucide.ChevronRight)
             }
         }
-        if (ui.recent.isEmpty()) {
-            item(key = "empty") {
-                EmptyState(
-                    Lucide.Inbox,
-                    "No transactions yet",
-                    "Kash reads your M-Pesa and bank messages as they arrive. Your first one will appear here.",
-                )
-            }
-        } else {
+        if (ui.recent.isNotEmpty()) {
             item(key = "recent") {
                 GlassCard(contentPadding = PaddingValues(horizontal = Space.m, vertical = Space.xs)) {
                     ui.recent.forEach { TxRow(it, hidden) }
@@ -167,7 +184,7 @@ private fun Header(ui: HomeUi, hidden: Boolean, onToggleHidden: () -> Unit, load
                 Skeleton(Modifier.padding(top = Space.xs).width(180.dp).height(36.dp))
             } else {
                 Text(
-                    ui.netWorth.display(hidden),
+                    if (ui.ready && ui.hasData) ui.netWorth.display(hidden) else "—",
                     style = MaterialTheme.typography.displaySmall,
                     color = c.text,
                     maxLines = 1,
@@ -214,6 +231,11 @@ private fun SafeToSpendCard(safe: SafeToSpend.Result, ui: HomeUi, hidden: Boolea
         if (ui.fuliza.isPositive) {
             Text("Includes ${ui.fuliza.display(hidden)} Fuliza you still owe", style = MaterialTheme.typography.bodySmall, color = c.textMuted)
         }
+        Text(
+            "Assumes your next money arrives on $until. Setting your own payday is coming soon.",
+            style = MaterialTheme.typography.bodySmall,
+            color = c.textMuted,
+        )
     }
 }
 

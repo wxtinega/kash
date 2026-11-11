@@ -10,7 +10,7 @@ on the device, encrypted.
 |---|---|---|
 | `core/parser` | Pure Kotlin. Reads messages, filters scams and noise, checks the balance chain. | Done, 53 tests passing (20 from real messages) |
 | `core/insights` | Categorising, "What was this?" questions, safe-to-spend, savings & investment schemes, investment tracker, fund messages | Done, 38 tests passing |
-| `app` | Jetpack Compose UI: theme, components, lock screen, Home, Activity (live search), Savings, Settings; background sync. Runs on demo messages through the real parser | Written, not yet compiled (needs the GitHub build) |
+| `app` | Jetpack Compose UI: theme, components, lock screen, Home, Activity (live search), Savings, Settings; background sync. Reads the phone's SMS inbox (last 6 months) after consent and permission; refreshes on new SMS, on resume and in the background | Built and published by GitHub Actions |
 
 ## How the message filter works
 

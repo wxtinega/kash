@@ -112,7 +112,7 @@ fun ActivityScreen(vm: ActivityViewModel, hidden: Boolean, contentPadding: Paddi
         when {
             !ui.ready -> if (showSkeleton) items(6) { SkeletonRow() }
             ui.totalCount == 0 -> item(key = "empty") {
-                EmptyState(Lucide.Inbox, "Nothing here yet", "Transactions show up as soon as your M-Pesa or bank messages arrive.")
+                EmptyState(Lucide.Inbox, "Nothing here yet", "Transactions appear here from your M-Pesa and bank messages. If you haven't allowed SMS access yet, you can do it from Home.")
             }
             ui.days.isEmpty() -> item(key = "no-results") {
                 EmptyState(

@@ -1,6 +1,6 @@
 # Kash Privacy Policy
 
-**Version 1 · Effective 11 November 2026 · Testing version**
+**Version 2 · Effective 12 November 2026 · Testing version**
 
 Kash is a personal money manager made by T.I. It reads the M-Pesa, bank and investment
 messages on your phone to show you where your money goes. This policy explains, in plain
@@ -22,15 +22,18 @@ With your permission, Kash reads the SMS messages on your phone:
   was flagged, so it can warn you.
 
 ## 3. What Kash stores, and where
-Kash stores the following **only on your phone**, in app-private storage that other apps
-cannot read:
-- the transactions it found, and the balances, categories and savings figures worked out from them;
-- your answers (for example, that a payment was "Food"), your savings check-ins and your settings;
-- account numbers that appear in your bank messages, so it can recognise transfers between
-  your own accounts.
+Kash does not keep a copy of your messages or transactions. Each time it opens or a new message
+arrives, it reads them again from your inbox and works out your balances, categories and savings.
 
-Encrypting this storage is being added during the testing period. Until then, please keep your
-phone protected with a screen lock.
+What it does keep, **only on your phone**:
+- your answers (for example, that a payment to a person was "Food"), which can include that
+  person's name or phone number;
+- balances you typed in, accounts you removed, and bank sender names you confirmed;
+- your settings (theme, language, lock).
+
+Your answers, balances and account choices are **encrypted** (AES-256) with a key that is created
+inside your phone's secure hardware and never leaves it, not even to Kash. Data saved by earlier
+test versions is moved into this encrypted storage automatically, and the old copy is deleted.
 
 ## 4. What leaves your phone
 **Nothing.** In this version, Kash does not upload, send or share any of your information with
@@ -41,7 +44,7 @@ you will be asked to turn on first (such as an encrypted backup).
 | Permission | Why |
 |---|---|
 | Read and receive SMS | To find your transactions as they arrive |
-| Notifications | For "What was this?" questions and your monthly summary |
+| Notifications | To ask what a new payment was for, right after it happens, and for your monthly summary. On the lock screen these only say "New payment to sort", with no amounts or names |
 | Fingerprint / face / PIN | To lock Kash. Android checks it; Kash never sees your fingerprint or face |
 
 You can withdraw any permission in your phone's settings. Kash will keep working with what it already has.

@@ -64,6 +64,7 @@ class MainActivity : FragmentActivity() {
 
     override fun onStop() {
         super.onStop()
+        (application as KashApp).onScreen = false
         // Rotation isn't "leaving"; everything else is.
         if (!isChangingConfigurations) unlocked.value = false
     }
@@ -78,6 +79,7 @@ class MainActivity : FragmentActivity() {
         smsGranted.value = SmsInbox.hasPermission(this)
         // Pick up anything that arrived while Kash was in the background.
         val app = application as KashApp
+        app.onScreen = true
         app.appScope.launch { runCatching { app.repository.sync() } }
     }
 

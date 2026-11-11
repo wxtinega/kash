@@ -20,6 +20,8 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
     override suspend fun doWork(): Result = try {
         val repo = (applicationContext as KashApp).repository
         repo.sync()
+        val app = applicationContext as KashApp
+        TransactionNotifier.onState(app, repo.state.value, app.prefs, app.onScreen)
         ReportNotifier.maybeNotify(applicationContext, repo.state.value)
         Result.success()
     } catch (t: Throwable) {

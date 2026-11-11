@@ -56,7 +56,7 @@ import com.kash.app.ui.theme.Kash
 import com.kash.app.ui.theme.Space
 
 /** Bump when legal/PRIVACY.md changes in a way users must re-agree to. */
-const val PRIVACY_POLICY_VERSION = 1
+const val PRIVACY_POLICY_VERSION = 2
 
 /**
  * Shown before anything else until the user agrees to the current policy version.

@@ -22,6 +22,8 @@ class SmsReceiver : BroadcastReceiver() {
             try {
                 delay(2_000) // give the system a moment to write the message to the inbox
                 app.repository.sync()
+                // Post before finishing, in case Android ends the process right after.
+                TransactionNotifier.onState(app, app.repository.state.value, app.prefs, app.onScreen)
             } catch (_: Throwable) {
                 // Next sync (app open or background worker) will pick it up.
             } finally {

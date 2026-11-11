@@ -42,5 +42,10 @@
                 <action android:name="android.provider.Telephony.SMS_RECEIVED" />
             </intent-filter>
         </receiver>
+
+        <!-- Quick answers from "What was it for?" notifications. Private to Kash. -->
+        <receiver
+            android:name=".sync.NotificationAnswerReceiver"
+            android:exported="false" />
     </application>
 </manifest>

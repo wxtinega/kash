@@ -47,7 +47,17 @@ data class TxItem(
     val pending: Boolean = false,
 )
 
-data class Question(val txId: String, val key: MerchantKey?, val prompt: String, val choices: List<Category>)
+data class Question(
+    val txId: String,
+    val key: MerchantKey?,
+    val prompt: String,
+    val choices: List<Category>,
+    /** Who it went to / came from, how much, and when — for the "What was it for?" notification. */
+    val title: String = "",
+    val amount: Money = Money.ZERO,
+    val incoming: Boolean = false,
+    val at: LocalDateTime? = null,
+)
 
 data class AccountCard(
     val id: String,
@@ -169,7 +179,13 @@ class LocalRepository(
         withContext(Dispatchers.Default) { _state.update { build(it.scams) } }
     }
 
-    override suspend fun answer(txId: String, category: Category) = withContext(Dispatchers.Default) {
+    override suspend fun answer(txId: String, category: Category) {
+        // Answered from a notification while Kash was closed: messages may not be read yet.
+        if (parsed.none { it.code == txId }) sync()
+        answerLoaded(txId, category)
+    }
+
+    private suspend fun answerLoaded(txId: String, category: Category) = withContext(Dispatchers.Default) {
         val tx = parsed.firstOrNull { it.code == txId } ?: return@withContext
         val key = MerchantKey.of(tx) ?: MerchantKey.single(tx)
         learned.put(key, category)
@@ -217,7 +233,11 @@ class LocalRepository(
                         investEvents.getOrPut(id) { mutableListOf() } += ev
                     }
                 }
-                is Placement.Ask -> questions += Question(tx.code, p.key, p.prompt, p.choices)
+                is Placement.Ask -> questions += Question(
+                    tx.code, p.key, p.prompt, p.choices,
+                    title = tx.counterparty ?: label(tx.type), amount = tx.amount,
+                    incoming = tx.type.flow == Flow.IN, at = tx.occurredAt,
+                )
             }
             items += TxItem(
                 id = tx.code,

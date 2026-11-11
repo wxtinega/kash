@@ -58,6 +58,8 @@ import com.kash.app.ui.spoken
 import com.kash.app.ui.theme.Kash
 import com.kash.app.ui.theme.Space
 import com.kash.insights.Category
+import com.kash.insights.OUTGOING_CATEGORIES
+import androidx.compose.runtime.setValue
 import com.kash.insights.SafeToSpend
 import com.kash.parser.Provider
 import java.time.format.DateTimeFormatter
@@ -134,7 +136,7 @@ fun HomeScreen(
         ui.gaps.firstOrNull()?.let { g ->
             item(key = "gap") {
                 Notice(
-                    "${g.amount.display(hidden).removePrefix("−")} left your ${g.account} in a message Kash doesn't have.",
+                    "${g.amount.display(hidden).removePrefix("−")} left your ${g.account} with no message on this phone explaining it. Usually a deleted SMS, or a charge sent without a message.",
                     tone = Tone.WARNING,
                     modifier = Modifier.animateItem(),
                 )
@@ -272,12 +274,23 @@ private fun AccountTile(icon: androidx.compose.ui.graphics.vector.ImageVector, n
 @Composable
 private fun QuestionCard(q: Question, onAnswer: (Category) -> Unit, modifier: Modifier = Modifier) {
     val c = Kash.colors
-    GlassCard(strong = true, modifier = modifier) {
+    var showAll by androidx.compose.runtime.saveable.rememberSaveable(q.txId) { androidx.compose.runtime.mutableStateOf(false) }
+    GlassCard(strong = true, modifier = modifier.animateContentSize()) {
         Text(q.prompt, style = MaterialTheme.typography.bodyLarge, color = c.text)
         Spacer(Modifier.height(Space.s))
         // Wraps onto a second line at large font sizes instead of overflowing.
         FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
-            q.choices.forEach { cat -> Pill(cat.label, selected = false, onClick = { onAnswer(cat) }, icon = cat.icon()) }
+            if (!showAll) {
+                q.choices.filter { it != Category.OTHER }.forEach { cat ->
+                    Pill(cat.label, selected = false, onClick = { onAnswer(cat) }, icon = cat.icon())
+                }
+                // "Other…" opens the full list instead of filing it as "Other".
+                Pill("Other…", selected = false, onClick = { showAll = true }, icon = Lucide.Ellipsis)
+            } else {
+                OUTGOING_CATEGORIES.forEach { cat ->
+                    Pill(cat.label, selected = false, onClick = { onAnswer(cat) }, icon = cat.icon())
+                }
+            }
         }
     }
 }

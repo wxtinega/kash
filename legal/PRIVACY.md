@@ -14,7 +14,7 @@ language, what Kash does with your information. You must agree to it before usin
 
 ## 2. What Kash reads
 With your permission, Kash reads the SMS messages on your phone:
-- **Messages from M-Pesa, banks, and savings or investment providers** are read to find
+- **Messages from M-Pesa, Airtel Money, banks, and savings or investment providers** are read to find
   transactions (amounts, balances, dates, who you paid or who paid you, and reference codes).
 - **All other messages** are checked briefly, only to decide whether they are money messages
   or scams. Kash does not store their content.

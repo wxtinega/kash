@@ -27,7 +27,8 @@ object BalanceChain {
      * @param txs transactions for ONE account (one provider), in any order.
      */
     fun check(txs: List<Transaction>): List<Break> {
-        val ordered = txs.sortedWith(compareBy<Transaction> { it.occurredAt }.thenBy { it.code })
+        // Messages only show the minute; the phone's receive time orders two payments in the same minute.
+        val ordered = txs.sortedWith(compareBy<Transaction> { it.occurredAt }.thenBy { it.receivedAt }.thenBy { it.code })
         val fulizaCredits = ordered.filter { it.type == TxType.FULIZA_LOAN }
         val breaks = mutableListOf<Break>()
         var prev: Transaction? = null

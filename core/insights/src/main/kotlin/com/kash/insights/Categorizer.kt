@@ -15,6 +15,10 @@ class InMemoryLearnedRules : LearnedRules {
     @Synchronized override fun put(key: MerchantKey, category: Category) { map[key] = category }
 }
 
+/** Categories offered when the user taps "Other…": everything money can go out to. */
+val OUTGOING_CATEGORIES: List<Category> = Category.entries.filter { it.isSpending && it != Category.OTHER } +
+    listOf(Category.SAVINGS, Category.TRANSFER, Category.OTHER)
+
 /** What the app does with a transaction it can't place. */
 sealed interface Placement {
     data class Known(val result: Categorized) : Placement
@@ -126,7 +130,7 @@ class Categorizer(
             TxType.FULIZA_LOAN -> t(Category.FEES, "Fuliza overdraft")
             TxType.FULIZA_REPAY -> t(Category.LOAN_REPAYMENT, "Fuliza repayment")
             TxType.REVERSAL -> t(Category.TRANSFER, "Reversal of an earlier transaction")
-            TxType.RECEIVED, TxType.BANK_CREDIT -> t(Category.MONEY_IN, "Money received")
+            TxType.RECEIVED, TxType.BANK_CREDIT, TxType.OTHER_IN -> t(Category.MONEY_IN, "Money received")
             else -> null
         }
     }
@@ -135,7 +139,9 @@ class Categorizer(
         val who = tx.counterparty ?: "this payment"
         val amount = tx.amount.format()
         val (prompt, likely) = when (tx.type) {
-            TxType.SENT -> "You sent $amount to $who. What was it for?" to listOf(Category.FAMILY, Category.FRIENDS)
+            // Money to a person is often for food or goods (mama mboga, a fundi), not just family.
+            TxType.SENT -> "You sent $amount to $who. What was it for?" to listOf(Category.FAMILY, Category.FOOD)
+            TxType.OTHER_OUT -> "$amount left your ${tx.provider.displayName}${tx.counterparty?.let { " to $it" } ?: ""}. What was it?" to listOf(Category.UTILITIES, Category.SHOPPING)
             TxType.TILL -> "$amount paid to $who. What was it?" to listOf(Category.FOOD, Category.FUEL_TRANSPORT)
             TxType.PAYBILL -> "$amount paid to $who. What was it?" to listOf(Category.UTILITIES, Category.SHOPPING)
             TxType.BANK_DEBIT -> "$amount from your bank to $who. What was it?" to listOf(Category.SHOPPING, Category.SUBSCRIPTIONS)

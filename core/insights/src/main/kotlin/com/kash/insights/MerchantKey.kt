@@ -45,6 +45,7 @@ value class MerchantKey(val value: String) {
                     MerchantKey(if (acct != null) "paybill:$it|${normalizeName(acct)}" else "paybill:$it")
                 }
                 TxType.TILL -> name?.let { MerchantKey("till:$it") }
+                TxType.OTHER_OUT -> name?.let { MerchantKey("other:${tx.provider.name}:$it") }
                 TxType.BANK_DEBIT, TxType.BANK_CREDIT -> name?.let { MerchantKey("bank:${tx.provider.name}:$it") }
                 else -> null // airtime, withdrawals, Fuliza, M-Shwari: the type alone decides
             }

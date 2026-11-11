@@ -31,14 +31,31 @@ import com.kash.app.ui.theme.KashTheme
 
 private enum class Stage { LOADING, CONSENT, LOCKED, SMS_ACCESS, OPEN }
 
+private const val KEY_UNLOCKED = "unlocked"
+
 /** FragmentActivity because the biometric prompt needs it. */
 class MainActivity : FragmentActivity() {
     /** Re-checked on every resume: the user may have granted SMS access in App info meanwhile. */
     private val smsGranted = mutableStateOf(false)
 
+    /** Unlocked only while Kash is on screen. Leaving it (another app, home, screen off) locks it again. */
+    private val unlocked = mutableStateOf(false)
+
+    override fun onStop() {
+        super.onStop()
+        // Rotation isn't "leaving"; everything else is.
+        if (!isChangingConfigurations) unlocked.value = false
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putBoolean(KEY_UNLOCKED, unlocked.value && isChangingConfigurations)
+    }
+
     override fun onResume() {
         super.onResume()
         smsGranted.value = SmsInbox.hasPermission(this)
+        unlocked.value = savedInstanceState?.getBoolean(KEY_UNLOCKED) == true
         // Pick up anything that arrived while Kash was in the background.
         val app = application as KashApp
         app.appScope.launch { runCatching { app.repository.sync() } }
@@ -61,7 +78,7 @@ class MainActivity : FragmentActivity() {
             // null until stored settings are read (a few ms), so the consent screen never flashes for people who agreed.
             val loaded by app.settings.settings.collectAsStateWithLifecycle<UserSettings?>(initialValue = null)
             val settings = loaded ?: UserSettings()
-            var unlocked by rememberSaveable { mutableStateOf(false) }
+            var isUnlocked by unlocked
             var skippedSms by rememberSaveable { mutableStateOf(false) }
             val hasSms by smsGranted
             val scope = rememberCoroutineScope()
@@ -69,7 +86,7 @@ class MainActivity : FragmentActivity() {
                 val stage = when {
                     loaded == null -> Stage.LOADING
                     settings.acceptedPolicyVersion < PRIVACY_POLICY_VERSION -> Stage.CONSENT
-                    !unlocked -> Stage.LOCKED
+                    !isUnlocked -> Stage.LOCKED
                     !hasSms && !skippedSms -> Stage.SMS_ACCESS
                     else -> Stage.OPEN
                 }
@@ -83,7 +100,7 @@ class MainActivity : FragmentActivity() {
                         Stage.CONSENT -> ConsentScreen(onAgree = {
                             scope.launch { app.settings.acceptPolicy(PRIVACY_POLICY_VERSION) }
                         })
-                        Stage.LOCKED -> LockScreen(onUnlocked = { unlocked = true })
+                        Stage.LOCKED -> LockScreen(onUnlocked = { isUnlocked = true })
                         Stage.SMS_ACCESS -> SmsAccessScreen(
                             onGranted = {
                                 smsGranted.value = true

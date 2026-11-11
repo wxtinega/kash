@@ -15,6 +15,7 @@ data class RawSms(
 
 enum class Provider(val displayName: String) {
     MPESA("M-Pesa"),
+    AIRTEL_MONEY("Airtel Money"),
     EQUITY("Equity Bank"),
     KCB("KCB"),
     NCBA("NCBA"),
@@ -24,9 +25,12 @@ enum class Provider(val displayName: String) {
     FAMILY("Family Bank"),
     IM("I&M Bank"),
     DTB("DTB"),
+    CITI("Citibank"),
+    STANBIC("Stanbic Bank"),
     ;
 
-    val isBank: Boolean get() = this != MPESA
+    val isMobileMoney: Boolean get() = this == MPESA || this == AIRTEL_MONEY
+    val isBank: Boolean get() = !isMobileMoney
 }
 
 /** How a transaction moves money in the account the message came from. */
@@ -56,6 +60,9 @@ enum class TxType(val flow: Flow) {
     REVERSAL(Flow.ADJUST),
     BANK_CREDIT(Flow.IN),
     BANK_DEBIT(Flow.OUT),
+    /** A real confirmation in a format Kash doesn't know yet: amount, cost and balance still counted. */
+    OTHER_IN(Flow.IN),
+    OTHER_OUT(Flow.OUT),
 }
 
 enum class Confidence { HIGH, MEDIUM, LOW }
@@ -90,6 +97,8 @@ data class Transaction(
     val pending: Boolean = false,
     /** Card purchases in another currency, e.g. "USD 23.20". [amount] is then unknown until resolved. */
     val foreignAmount: String? = null,
+    /** When the phone received the SMS. Orders transactions within the same minute correctly. */
+    val receivedAt: java.time.Instant? = null,
     val parserVersion: Int = PARSER_VERSION,
 )
 

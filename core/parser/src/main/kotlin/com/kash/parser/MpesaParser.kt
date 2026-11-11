@@ -38,8 +38,35 @@ class MpesaParser(rules: List<RuleSpec> = DEFAULT_RULES) {
             val m = regex.find(body) ?: continue
             return build(rule, m, code, body, fallbackTime)
         }
-        // Starts like a real confirmation but no rule fits: a new or changed format.
-        return ParseOutcome.NeedsReview(Provider.MPESA, "Unrecognised M-Pesa format")
+        // Starts like a real confirmation but no rule fits: a new or changed format. Still take what we
+        // can (amount, cost, balance) so the money is accounted for; the user is asked what it was for.
+        return unknownFormat(code, body, fallbackTime)
+    }
+
+    private fun unknownFormat(code: String, body: String, fallbackTime: LocalDateTime): ParseOutcome {
+        val amount = GENERIC_AMOUNT.find(body)?.let { Money.parseNumber(it.groupValues[1]) }
+        val balance = Fields.balance(body)
+        if (amount == null || !amount.isPositive) {
+            return ParseOutcome.NeedsReview(Provider.MPESA, "Unrecognised M-Pesa format")
+        }
+        val incoming = INCOMING_WORDS.containsMatchIn(body)
+        val who = (if (incoming) FROM_WHO else TO_WHO).find(body)?.groupValues?.get(1)
+        val (name, phone) = who?.let { Fields.splitNameAndPhone(it) } ?: (null to null)
+        val time = Fields.dateTime(body)
+        val tx = Transaction(
+            code = code,
+            provider = Provider.MPESA,
+            type = if (incoming) TxType.OTHER_IN else TxType.OTHER_OUT,
+            amount = amount,
+            fee = Fields.fee(body) ?: Money.ZERO,
+            counterparty = name,
+            counterpartyPhone = phone,
+            accountNumber = null,
+            occurredAt = time ?: fallbackTime,
+            balanceAfter = balance,
+            confidence = Confidence.LOW,
+        )
+        return ParseOutcome.NeedsReview(Provider.MPESA, "New M-Pesa message format", tx)
     }
 
     private fun build(
@@ -98,6 +125,10 @@ class MpesaParser(rules: List<RuleSpec> = DEFAULT_RULES) {
 
     companion object {
         private val MAX_FEE = Money.ofShillings(10_000)
+        private val GENERIC_AMOUNT = Regex("""(?:Ksh|KES|Kshs)\.?\s?((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?)""", RegexOption.IGNORE_CASE)
+        private val INCOMING_WORDS = Regex("""\b(received|deposited|credited|reversed|refund(?:ed)?)\b""", RegexOption.IGNORE_CASE)
+        private val TO_WHO = Regex("""\bto (.+?)(?: for account | on\s*\d|\.\s|$)""", RegexOption.IGNORE_CASE)
+        private val FROM_WHO = Regex("""\bfrom (.+?)(?: on\s*\d|\.\s|$)""", RegexOption.IGNORE_CASE)
         private val FAILED = Regex("""^\s*Failed\b|insufficient funds|could not be completed""", RegexOption.IGNORE_CASE)
         private const val A = Fields.AMT
 

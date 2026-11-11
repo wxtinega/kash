@@ -37,6 +37,8 @@ data class TxItem(
     val title: String,
     val subtitle: String,
     val amount: Money,
+    /** Transaction cost stated in the message (M-Pesa/Airtel/bank charge). Counted as spending. */
+    val fee: Money = Money.ZERO,
     val incoming: Boolean,
     val category: Category?,
     val at: LocalDateTime,
@@ -149,6 +151,7 @@ class LocalRepository(
                 title = tx.counterparty ?: label(tx.type),
                 subtitle = listOfNotNull(tx.provider.displayName, if (tx.pending) "Processing" else null).joinToString(" · "),
                 amount = tx.amount,
+                fee = tx.fee,
                 incoming = tx.type.flow == Flow.IN,
                 category = category,
                 at = tx.occurredAt,

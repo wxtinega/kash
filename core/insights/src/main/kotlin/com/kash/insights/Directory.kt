@@ -7,7 +7,12 @@ package com.kash.insights
 internal object Directory {
 
     private val KNOWN: List<Pair<String, Category>> = listOf(
-        // utilities & bills
+        // utilities & bills (phone data bundles and home internet count as bills)
+        "SAFARICOM DATA BUNDLES" to Category.UTILITIES, "SAFARICOM DATA" to Category.UTILITIES,
+        "SAFARICOM BUNDLES" to Category.UTILITIES, "SAFARICOM OFFERS" to Category.UTILITIES,
+        "SAFARICOM POSTPAID" to Category.UTILITIES, "SAFARICOM FIBRE" to Category.UTILITIES,
+        "AIRTEL BUNDLES" to Category.UTILITIES, "AIRTEL DATA" to Category.UTILITIES,
+        "TELKOM" to Category.UTILITIES,
         "KPLC" to Category.UTILITIES, "KENYA POWER" to Category.UTILITIES, "NAIROBI WATER" to Category.UTILITIES,
         "ZUKU" to Category.UTILITIES, "SAFARICOM HOME" to Category.UTILITIES, "FAIBA" to Category.UTILITIES,
         "DSTV" to Category.SUBSCRIPTIONS, "GOTV" to Category.SUBSCRIPTIONS, "SHOWMAX" to Category.SUBSCRIPTIONS,

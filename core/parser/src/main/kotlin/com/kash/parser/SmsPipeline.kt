@@ -27,6 +27,7 @@ class SmsPipeline(
     private val seen: SeenStore = InMemorySeenStore(),
     private val mpesa: MpesaParser = MpesaParser(),
     private val banks: BankParser = BankParser(),
+    private val airtel: AirtelMoneyParser = AirtelMoneyParser(),
     private val zone: ZoneId = ZoneId.of("Africa/Nairobi"),
 ) {
 
@@ -37,6 +38,7 @@ class SmsPipeline(
         val outcome = when (val sender = senders.classify(sms.sender)) {
             is SenderClass.Trusted -> when (sender.provider) {
                 Provider.MPESA -> mpesa.parse(body, fallbackTime)
+                Provider.AIRTEL_MONEY -> airtel.parse(sms.sender, body, fallbackTime)
                 else -> banks.parse(sender.provider, sms.sender, body, fallbackTime)
             }
             SenderClass.PersonalNumber, SenderClass.Unknown -> untrusted(sms.sender, body)
@@ -45,7 +47,15 @@ class SmsPipeline(
         if (outcome is ParseOutcome.Parsed && !seen.markIfNew(outcome.tx.code)) {
             return ParseOutcome.Duplicate(outcome.tx.code)
         }
-        return outcome
+        return when (outcome) {
+            is ParseOutcome.Parsed -> outcome.copy(tx = outcome.tx.copy(receivedAt = sms.receivedAt))
+            is ParseOutcome.NeedsReview -> {
+                val partial = outcome.partial
+                if (partial != null && !seen.markIfNew(partial.code)) ParseOutcome.Duplicate(partial.code)
+                else outcome.copy(partial = partial?.copy(receivedAt = sms.receivedAt))
+            }
+            else -> outcome
+        }
     }
 
     private fun untrusted(rawSender: String, body: String): ParseOutcome {

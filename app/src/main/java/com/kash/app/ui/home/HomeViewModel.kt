@@ -54,7 +54,7 @@ class HomeViewModel(private val repo: KashRepository) : ViewModel() {
         val savings = s.holdings.fold(Money.ZERO) { acc, h -> acc + h.value }
         val spentToday = s.transactions
             .filter { !it.incoming && it.at.toLocalDate() == today && it.category?.isSpending != false }
-            .fold(Money.ZERO) { acc, t -> acc + t.amount }
+            .fold(Money.ZERO) { acc, t -> acc + t.amount + t.fee }
         val recent = s.transactions.take(6).map { t -> opt[t.id]?.let { t.copy(category = it) } ?: t }
         HomeUi(
             ready = s.ready,

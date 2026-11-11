@@ -214,3 +214,24 @@ class FraudSenderTest {
         assertTrue(run("M-PESA", body) is ParseOutcome.Parsed)
     }
 }
+
+class FeedbackRound1InsightsTest {
+    private fun t(body: String) =
+        (com.kash.parser.SmsPipeline().process(com.kash.parser.RawSms("MPESA", body, java.time.Instant.parse("2026-11-11T08:00:00Z"))) as com.kash.parser.ParseOutcome.Parsed).tx
+
+    @Test fun dataBundlesAreBills() {
+        val p = Categorizer().place(t("UL1DATA001 Confirmed. Ksh99.00 sent to SAFARICOM DATA BUNDLES for account SAFARICOM DATA BUNDLES on 11/11/26 at 9:00 AM New M-PESA balance is Ksh901.00. Transaction cost, Ksh0.00."))
+        assertEquals(Category.UTILITIES, (p as Placement.Known).result.category)
+    }
+
+    @Test fun moneyToAPersonOffersFamilyAndFood() {
+        val p = Categorizer().place(t("UL1SEND001 Confirmed. Ksh150.00 sent to MAMA NJERI 0711*444** on 11/11/26 at 6:00 PM. New M-PESA balance is Ksh751.00. Transaction cost, Ksh0.00.")) as Placement.Ask
+        assertEquals(listOf(Category.FAMILY, Category.FOOD, Category.OTHER), p.choices)
+    }
+
+    @Test fun otherOpensEveryOutgoingCategory() {
+        assertTrue(Category.FOOD in OUTGOING_CATEGORIES && Category.FRIENDS in OUTGOING_CATEGORIES && Category.SAVINGS in OUTGOING_CATEGORIES)
+        assertEquals(Category.OTHER, OUTGOING_CATEGORIES.last())
+        assertTrue(Category.MONEY_IN !in OUTGOING_CATEGORIES)
+    }
+}

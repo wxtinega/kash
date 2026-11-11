@@ -72,6 +72,13 @@ class SenderPolicy(private val trusted: Map<String, Provider>) {
          */
         val DEFAULT_TRUSTED: Map<String, Provider> = mapOf(
             "MPESA" to Provider.MPESA,
+            "AIRTELMONEY" to Provider.AIRTEL_MONEY,
+            "AIRTELMONEYKE" to Provider.AIRTEL_MONEY,
+            "CITIBANK" to Provider.CITI,
+            "CITIKENYA" to Provider.CITI,
+            "CITI" to Provider.CITI,
+            "STANBIC" to Provider.STANBIC,
+            "STANBICBANK" to Provider.STANBIC,
             "EQUITYBANK" to Provider.EQUITY,
             "EQUITY" to Provider.EQUITY,
             "KCB" to Provider.KCB,

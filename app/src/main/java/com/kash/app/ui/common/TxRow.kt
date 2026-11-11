@@ -41,7 +41,8 @@ fun TxRow(tx: TxItem, hidden: Boolean, modifier: Modifier = Modifier) {
             .heightIn(min = 56.dp)
             .padding(vertical = Space.s)
             .clearAndSetSemantics {
-                contentDescription = "${tx.title}, $categoryLabel, ${tx.amount.spoken(hidden, tx.incoming)}, ${tx.at.shortTime()}"
+                contentDescription = "${tx.title}, $categoryLabel, ${tx.amount.spoken(hidden, tx.incoming)}" +
+                    (if (tx.fee.isPositive) ", plus ${tx.fee.spoken(hidden)} transaction cost" else "") + ", ${tx.at.shortTime()}"
             },
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -50,7 +51,9 @@ fun TxRow(tx: TxItem, hidden: Boolean, modifier: Modifier = Modifier) {
         Column(Modifier.weight(1f)) {
             Text(tx.title, style = MaterialTheme.typography.bodyLarge, color = c.text, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(
-                "$categoryLabel · ${tx.at.shortTime()}" + if (tx.pending) " · Processing" else "",
+                "$categoryLabel · ${tx.at.shortTime()}" +
+                    (if (tx.fee.isPositive) " · ${tx.fee.display(hidden)} cost" else "") +
+                    (if (tx.pending) " · Processing" else ""),
                 style = MaterialTheme.typography.bodySmall,
                 color = c.textMuted,
                 maxLines = 1,

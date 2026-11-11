@@ -1,0 +1,38 @@
+name: Unpack source
+
+# Uploading kash-source.zip through the GitHub website replaces the project's code with the
+# zip's contents, commits it, and starts the build. (Workflow files themselves are edited on GitHub.)
+on:
+  push:
+    paths: ['kash-source.zip']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Replace source with the uploaded zip
+        run: |
+          set -e
+          if [ ! -f kash-source.zip ]; then echo "No zip to unpack"; exit 0; fi
+          mkdir -p /tmp/src && unzip -q kash-source.zip -d /tmp/src
+          find . -mindepth 1 -maxdepth 1 ! -name .git ! -name .github ! -name kash-source.zip -exec rm -rf {} +
+          rsync -a --exclude .github /tmp/src/kash/ ./
+          rm -f kash-source.zip
+          chmod +x gradlew
+          git config user.name "kash-bot"
+          git config user.email "kash-bot@users.noreply.github.com"
+          git add -A
+          git commit -m "Update source from uploaded zip" || echo "Nothing changed"
+          git push
+
+      - name: Start the build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run build.yml --ref main

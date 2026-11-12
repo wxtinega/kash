@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -112,10 +113,13 @@ fun KashNav(
             snackbarHost = { SnackbarHost(snackbar) },
             bottomBar = { BottomBar(current) { go(it) } },
             modifier = Modifier.statusBarsPadding(),
-        ) { padding ->
+        ) { scaffoldPadding ->
+            // Screens end exactly where the bottom bar starts, so nothing ever scrolls underneath it.
+            val padding = PaddingValues(top = scaffoldPadding.calculateTopPadding())
             NavHost(
                 navController = nav,
                 startDestination = Tab.HOME.route,
+                modifier = Modifier.padding(bottom = scaffoldPadding.calculateBottomPadding()),
                 enterTransition = { fadeIn(tween(120)) },
                 exitTransition = { fadeOut(tween(90)) },
                 popEnterTransition = { fadeIn(tween(120)) },
@@ -157,7 +161,7 @@ fun KashNav(
     }
 }
 
-/** Glass bottom bar. Each item is a full 48dp+ target; the selected one gets the accent. */
+/** Solid bottom bar, always visible. Each item is a full 48dp+ target; the selected one gets the accent. */
 @Composable
 private fun BottomBar(current: String?, onSelect: (Tab) -> Unit) {
     val c = Kash.colors
@@ -165,6 +169,7 @@ private fun BottomBar(current: String?, onSelect: (Tab) -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
+            .background(c.background, shape) // opaque base: content never shows through
             .background(c.glassStrong, shape)
             .border(1.dp, c.border, shape)
             .navigationBarsPadding()

@@ -173,6 +173,28 @@ fun HomeScreen(
             items(ui.questions, key = { "q-" + it.txId }) { q ->
                 QuestionCard(q, onAnswer = { vm.answer(q, it) }, modifier = Modifier.animateItem())
             }
+        } else {
+            // All caught up: a line about money, new every day.
+            item(key = "quote") { QuoteCard(ui.quote, Modifier.animateItem()) }
+        }
+
+        // Older unsorted payments stay unsorted unless the user chooses to deal with them.
+        if (ui.olderQuestions.isNotEmpty()) {
+            item(key = "older-toggle") {
+                val n = ui.olderQuestions.size
+                KashButton(
+                    if (ui.showOlder) "Done sorting older payments" else "Sort older payments ($n)",
+                    { vm.setShowOlder(!ui.showOlder) },
+                    style = ButtonStyle.QUIET,
+                    icon = if (ui.showOlder) Lucide.Check else Lucide.History,
+                    modifier = Modifier.animateItem(),
+                )
+            }
+            if (ui.showOlder) {
+                items(ui.olderQuestions, key = { "oq-" + it.txId }) { q ->
+                    QuestionCard(q, onAnswer = { vm.answer(q, it) }, modifier = Modifier.animateItem(), showDate = true)
+                }
+            }
         }
 
         item(key = "recent-title") {
@@ -320,10 +342,14 @@ private fun AccountTile(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun QuestionCard(q: Question, onAnswer: (Category) -> Unit, modifier: Modifier = Modifier) {
+private fun QuestionCard(q: Question, onAnswer: (Category) -> Unit, modifier: Modifier = Modifier, showDate: Boolean = false) {
     val c = Kash.colors
     var showAll by androidx.compose.runtime.saveable.rememberSaveable(q.txId) { androidx.compose.runtime.mutableStateOf(false) }
     GlassCard(strong = true, modifier = modifier.animateContentSize()) {
+        if (showDate && q.at != null) {
+            Text(q.at.format(DateTimeFormatter.ofPattern("EEE d MMM yyyy", Locale.ENGLISH)), style = MaterialTheme.typography.labelMedium, color = c.textMuted)
+            Spacer(Modifier.height(Space.xxs))
+        }
         Text(q.prompt, style = MaterialTheme.typography.bodyLarge, color = c.text)
         Spacer(Modifier.height(Space.s))
         // Wraps onto a second line at large font sizes instead of overflowing.
@@ -343,6 +369,24 @@ private fun QuestionCard(q: Question, onAnswer: (Category) -> Unit, modifier: Mo
     }
 }
 
+
+/** The daily money line: big and calm, filling the space when there's nothing to sort. */
+@Composable
+private fun QuoteCard(quote: DailyQuote, modifier: Modifier = Modifier) {
+    val c = Kash.colors
+    GlassCard(strong = true, modifier = modifier.fillMaxWidth(), contentPadding = PaddingValues(Space.l)) {
+        Icon(Lucide.Quote, null, Modifier.size(24.dp), tint = c.accent)
+        Spacer(Modifier.height(Space.s))
+        Text(quote.text, style = MaterialTheme.typography.headlineSmall, color = c.text)
+        quote.meaning?.let {
+            Spacer(Modifier.height(Space.xs))
+            Text(it, style = MaterialTheme.typography.bodyLarge, color = c.textMuted)
+        }
+        Spacer(Modifier.height(Space.m))
+        Text(quote.source, style = MaterialTheme.typography.labelMedium, color = c.textMuted)
+        Text("You're all caught up", style = MaterialTheme.typography.bodySmall, color = c.textMuted)
+    }
+}
 
 /** For banks whose messages don't state a balance: enter it once; Kash keeps it up to date after that. */
 @Composable

@@ -17,6 +17,9 @@ data class ReportEntry(
 )
 
 data class CategoryTotal(val category: Category?, val amount: Money, val count: Int, val share: Double)
+/** Spending for days [firstDay]..[lastDay] (1-based) of the month. */
+data class WeekTotal(val firstDay: Int, val lastDay: Int, val amount: Money)
+
 data class PayeeTotal(val payee: String, val amount: Money, val count: Int)
 
 data class MonthlyReport(
@@ -41,6 +44,16 @@ data class MonthlyReport(
 ) {
     val net: Money get() = moneyIn - spent - saved
     val isEmpty: Boolean get() = transactionCount == 0
+
+    /** Days 1–7, 8–14, 15–21, 22–28, 29–end: readable totals under the daily chart. */
+    val weeks: List<WeekTotal>
+        get() = daily.chunked(7).mapIndexed { i, chunk ->
+            WeekTotal(i * 7 + 1, i * 7 + chunk.size, chunk.fold(Money.ZERO) { a, m -> a + m })
+        }
+
+    /** The days worth labelling on a small chart: the [n] biggest spending days, in date order (0-based). */
+    fun topDays(n: Int): List<Int> =
+        daily.withIndex().filter { it.value.isPositive }.sortedByDescending { it.value.cents }.take(n).map { it.index }.sorted()
 }
 
 object MonthlyReports {

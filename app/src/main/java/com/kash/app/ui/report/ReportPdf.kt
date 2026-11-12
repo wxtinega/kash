@@ -123,30 +123,48 @@ object ReportPdf {
         }
         y += 8; rule(c, y); y += 20
 
-        // Daily bars
-        newPageIfNeeded(140f)
+        // Daily bars: every day with spending carries its amount; every day is numbered; weekly totals below.
+        newPageIfNeeded(250f)
         text(c, "Spending by day", M, y, 13f, INK, bold = true); y += 8
         r.biggestDay?.let {
             text(c, "Biggest day: ${it.first.format(DateTimeFormatter.ofPattern("EEE d MMM", Locale.ENGLISH))}, ${it.second.pdf()}", M, y + 12, 10f, MUTED)
         }
         y += 22
-        val chartH = 80f
+        val labelRoom = 30f  // amounts are written upright above each bar, rotated to fit
+        val chartH = 90f
         val n = r.daily.size
         val gap = 2f
         val bw = (W - 2 * M - gap * (n - 1)) / n
         val dmax = r.daily.maxOfOrNull { it.cents }?.coerceAtLeast(1) ?: 1
+        val top = y + labelRoom
         r.daily.forEachIndexed { i, v ->
             val x = M + i * (bw + gap)
-            c.drawRoundRect(RectF(x, y, x + bw, y + chartH), 2f, 2f, fill(TRACK))
+            c.drawRoundRect(RectF(x, top, x + bw, top + chartH), 2f, 2f, fill(TRACK))
             if (v.cents > 0) {
                 val h = (v.cents.toFloat() / dmax * chartH).coerceAtLeast(2f)
-                c.drawRoundRect(RectF(x, y + chartH - h, x + bw, y + chartH), 2f, 2f, fill(BAR))
+                c.drawRoundRect(RectF(x, top + chartH - h, x + bw, top + chartH), 2f, 2f, fill(BAR))
+                // Amount, reading bottom-to-top, just above the bar.
+                c.save()
+                c.rotate(-90f, x + bw / 2 + 2.5f, top + chartH - h - 3f)
+                text(c, v.compact(), x + bw / 2 + 2.5f, top + chartH - h - 3f, 7f, INK)
+                c.restore()
             }
+            // Day number under every bar, centred.
+            val label = "${i + 1}"
+            val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 6.5f }
+            text(c, label, x + bw / 2 - p.measureText(label) / 2, top + chartH + 10, 6.5f, MUTED)
         }
-        y += chartH + 12
-        text(c, "1", M, y, 9f, MUTED)
-        text(c, "$n", W - M - 10, y, 9f, MUTED)
-        y += 14; rule(c, y); y += 20
+        y = top + chartH + 24
+
+        // Week by week, exact amounts.
+        val monthShort = r.month.format(DateTimeFormatter.ofPattern("MMM", Locale.ENGLISH))
+        r.weeks.forEach { wk ->
+            val label = if (wk.firstDay == wk.lastDay) "${wk.firstDay} $monthShort" else "${wk.firstDay}–${wk.lastDay} $monthShort"
+            text(c, label, M, y, 10f, MUTED)
+            text(c, wk.amount.pdf(), M + 120, y, 10f, INK, bold = true)
+            y += 15
+        }
+        y += 6; rule(c, y); y += 20
 
         // Top payees
         if (r.topPayees.isNotEmpty()) {

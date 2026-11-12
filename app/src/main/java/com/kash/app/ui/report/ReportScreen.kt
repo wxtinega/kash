@@ -42,6 +42,9 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kash.app.ui.components.ButtonStyle
@@ -258,7 +261,13 @@ private fun CategoryChart(r: MonthlyReport, hidden: Boolean) {
     }
 }
 
-/** Spending per day. Tap a bar to see that day's total. */
+/**
+ * Spending per day, readable without touching it:
+ *  - the 5 biggest days carry their amount above the bar (labelling all 31 would be unreadable on a phone),
+ *  - day numbers under the chart (1, 8, 15, 22, 29),
+ *  - a week-by-week list with exact totals underneath.
+ * Tapping any bar still shows that exact day.
+ */
 @Composable
 private fun DailyChart(r: MonthlyReport, hidden: Boolean) {
     val c = Kash.colors
@@ -267,48 +276,79 @@ private fun DailyChart(r: MonthlyReport, hidden: Boolean) {
     var selected by remember(r.month) { mutableStateOf<Int?>(null) }
     val max = r.daily.maxOfOrNull { it.cents }?.coerceAtLeast(1) ?: 1
     val dayFmt = DateTimeFormatter.ofPattern("EEE d MMM", Locale.ENGLISH)
+    val measurer = rememberTextMeasurer()
+    val labelStyle = MaterialTheme.typography.labelSmall.copy(color = c.textMuted)
+    val selectedStyle = MaterialTheme.typography.labelSmall.copy(color = c.text, fontWeight = FontWeight.SemiBold)
+    val labelled = remember(r) { r.topDays(5).toSet() }
+    val ticks = listOf(0, 7, 14, 21, 28).filter { it < r.daily.size }
 
     GlassCard {
         Text("Spending by day", style = MaterialTheme.typography.titleSmall, color = c.text, modifier = Modifier.semantics { heading() })
         val caption = selected?.let { d -> "${r.month.atDay(d + 1).format(dayFmt)}: ${r.daily[d].display(hidden)}" }
-            ?: r.biggestDay?.let { "Biggest day: ${it.first.format(dayFmt)}, ${it.second.display(hidden)}. Tap a bar for any day." }
-            ?: "Tap a bar to see that day."
+            ?: r.biggestDay?.let { "Biggest day: ${it.first.format(dayFmt)}, ${it.second.display(hidden)}" }
+            ?: "No spending this month."
         Text(caption, style = MaterialTheme.typography.bodySmall, color = c.textMuted)
         Spacer(Modifier.height(Space.s))
         Canvas(
             Modifier
                 .fillMaxWidth()
-                .height(96.dp)
+                .height(136.dp)
                 .semantics { contentDescription = "Daily spending chart. " + (r.biggestDay?.let { "Highest on day ${it.first.dayOfMonth}." } ?: "") }
                 .pointerInput(r.month) {
                     detectTapGestures { pos ->
                         val slot = size.width.toFloat() / r.daily.size
-                        selected = (pos.x / slot).toInt().coerceIn(0, r.daily.lastIndex)
+                        val d = (pos.x / slot).toInt().coerceIn(0, r.daily.lastIndex)
+                        selected = if (selected == d) null else d
                     }
                 },
         ) {
             val n = r.daily.size
             val gap = 2.dp.toPx()
             val w = (size.width - gap * (n - 1)) / n
+            val top = 16.dp.toPx()     // room for value labels
+            val bottom = 16.dp.toPx()  // room for day numbers
+            val chartH = size.height - top - bottom
             r.daily.forEachIndexed { i, v ->
-                val h = if (v.cents <= 0) 0f else (v.cents.toFloat() / max * size.height).coerceAtLeast(3.dp.toPx())
+                val h = if (v.cents <= 0) 0f else (v.cents.toFloat() / max * chartH).coerceAtLeast(3.dp.toPx())
                 val x = i * (w + gap)
-                // faint full-height track so empty days are still visible as slots
-                drawRoundRect(track, Offset(x, 0f), Size(w, size.height), CornerRadius(2.dp.toPx()))
+                drawRoundRect(track, Offset(x, top), Size(w, chartH), CornerRadius(2.dp.toPx()))
                 if (h > 0f) {
                     drawRoundRect(
                         color = if (selected == null || selected == i) barColor else barColor.copy(alpha = 0.45f),
-                        topLeft = Offset(x, size.height - h),
+                        topLeft = Offset(x, top + chartH - h),
                         size = Size(w, h),
                         cornerRadius = CornerRadius(2.dp.toPx()),
                     )
                 }
+                // Value above the bar: the biggest days always, plus whichever day was tapped.
+                if (v.isPositive && (i in labelled || i == selected)) {
+                    val text = if (hidden) "••" else v.compact()
+                    val layout = measurer.measure(text, if (i == selected) selectedStyle else labelStyle)
+                    val lx = (x + w / 2 - layout.size.width / 2).coerceIn(0f, size.width - layout.size.width)
+                    val ly = (top + chartH - h - layout.size.height - 2.dp.toPx()).coerceAtLeast(0f)
+                    drawText(layout, topLeft = Offset(lx, ly))
+                }
+            }
+            ticks.forEach { i ->
+                val x = i * (w + gap)
+                val layout = measurer.measure("${i + 1}", labelStyle)
+                val lx = (x + w / 2 - layout.size.width / 2).coerceIn(0f, size.width - layout.size.width)
+                drawText(layout, topLeft = Offset(lx, size.height - layout.size.height))
             }
         }
-        Row(Modifier.fillMaxWidth().padding(top = Space.xxs)) {
-            Text("1", style = MaterialTheme.typography.labelSmall, color = c.textMuted, modifier = Modifier.weight(1f))
-            Text("${r.daily.size}", style = MaterialTheme.typography.labelSmall, color = c.textMuted)
+        Spacer(Modifier.height(Space.s))
+        // Week by week, exact amounts.
+        val monthShort = r.month.format(DateTimeFormatter.ofPattern("MMM", Locale.ENGLISH))
+        r.weeks.forEach { wk ->
+            Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    if (wk.firstDay == wk.lastDay) "${wk.firstDay} $monthShort" else "${wk.firstDay}–${wk.lastDay} $monthShort",
+                    style = MaterialTheme.typography.bodySmall, color = c.textMuted, modifier = Modifier.weight(1f),
+                )
+                Text(wk.amount.display(hidden), style = MaterialTheme.typography.bodySmall, color = c.text)
+            }
         }
+        Text("Tap a bar to see any single day.", style = MaterialTheme.typography.labelSmall, color = c.textMuted, modifier = Modifier.padding(top = Space.xxs))
     }
 }
 

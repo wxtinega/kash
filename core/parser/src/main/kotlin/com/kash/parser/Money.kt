@@ -26,6 +26,20 @@ value class Money(val cents: Long) : Comparable<Money> {
         return (if (cents < 0) "-" else "") + "KSh $whole.$frac"
     }
 
+    /** Short label for charts: "850", "2.5k", "12k", "1.2M". Whole shillings only. */
+    fun compact(): String {
+        val abs = Math.abs(cents) / 100
+        val sign = if (cents < 0) "-" else ""
+        fun one(v: Double, unit: String) =
+            if (v < 10) String.format(Locale.US, "%.1f", v).removeSuffix(".0") + unit
+            else Math.round(v).toString() + unit
+        return sign + when {
+            abs < 1_000 -> abs.toString()
+            abs < 999_500 -> one(abs / 1_000.0, "k")
+            else -> one(abs / 1_000_000.0, "M")
+        }
+    }
+
     override fun toString(): String = format()
 
     companion object {

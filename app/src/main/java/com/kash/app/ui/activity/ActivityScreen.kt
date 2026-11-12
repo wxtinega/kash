@@ -11,6 +11,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -49,6 +50,14 @@ data class ActivityUi(
 )
 
 class ActivityViewModel(repo: KashRepository) : ViewModel() {
+    /**
+     * What's in the search box. Plain Compose state, updated on the main thread the instant a key is
+     * pressed. The box must never show a value that went through a background flow: when typing is
+     * faster than that round trip, the box receives an older copy and the cursor jumps or letters
+     * come out in the wrong order.
+     */
+    var queryText by androidx.compose.runtime.mutableStateOf("")
+        private set
     private val query = MutableStateFlow("")
     private val filter = MutableStateFlow(TxFilter.ALL)
 
@@ -79,7 +88,10 @@ class ActivityViewModel(repo: KashRepository) : ViewModel() {
     }.flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ActivityUi())
 
-    fun setQuery(q: String) { query.value = q }
+    fun setQuery(q: String) {
+        queryText = q
+        query.value = q // the list filters from this, a moment later; the box doesn't wait for it
+    }
     fun setFilter(f: TxFilter) { filter.value = f }
 }
 
@@ -101,7 +113,7 @@ fun ActivityScreen(vm: ActivityViewModel, hidden: Boolean, contentPadding: Paddi
             Text("Activity", style = MaterialTheme.typography.headlineSmall, color = c.text, modifier = Modifier.semantics { heading() })
         }
         item(key = "search") {
-            SearchField(ui.query, vm::setQuery, "Search name, category or amount", Modifier.fillMaxWidth().padding(top = Space.s))
+            SearchField(vm.queryText, vm::setQuery, "Search name, category or amount", Modifier.fillMaxWidth().padding(top = Space.s))
         }
         item(key = "filters") {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(Space.s)) {

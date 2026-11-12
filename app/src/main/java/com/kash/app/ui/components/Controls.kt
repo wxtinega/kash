@@ -8,6 +8,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -122,6 +123,7 @@ fun SearchField(
     modifier: Modifier = Modifier,
 ) {
     val c = Kash.colors
+    val focus = androidx.compose.ui.platform.LocalFocusManager.current
     val shape = RoundedCornerShape(14.dp)
     Row(
         modifier
@@ -141,7 +143,10 @@ fun SearchField(
                 textStyle = MaterialTheme.typography.bodyLarge.copy(color = c.text),
                 cursorBrush = SolidColor(c.accent),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                modifier = Modifier.semantics { contentDescription = placeholder },
+                // The search key just closes the keyboard; results are already filtered as you type.
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { focus.clearFocus() }),
+                // Whole width is tappable, not only the few pixels of text already typed.
+                modifier = Modifier.fillMaxWidth().semantics { contentDescription = placeholder },
             )
         }
         AnimatedVisibility(query.isNotEmpty(), enter = fadeIn(), exit = fadeOut()) {

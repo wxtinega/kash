@@ -123,48 +123,38 @@ object ReportPdf {
         }
         y += 8; rule(c, y); y += 20
 
-        // Daily bars: every day with spending carries its amount; every day is numbered; weekly totals below.
-        newPageIfNeeded(250f)
+        // Daily spending as horizontal bars: one row per day with spending, grouped by week.
+        newPageIfNeeded(60f)
         text(c, "Spending by day", M, y, 13f, INK, bold = true); y += 8
         r.biggestDay?.let {
             text(c, "Biggest day: ${it.first.format(DateTimeFormatter.ofPattern("EEE d MMM", Locale.ENGLISH))}, ${it.second.pdf()}", M, y + 12, 10f, MUTED)
         }
-        y += 22
-        val labelRoom = 30f  // amounts are written upright above each bar, rotated to fit
-        val chartH = 90f
-        val n = r.daily.size
-        val gap = 2f
-        val bw = (W - 2 * M - gap * (n - 1)) / n
+        y += 26
         val dmax = r.daily.maxOfOrNull { it.cents }?.coerceAtLeast(1) ?: 1
-        val top = y + labelRoom
-        r.daily.forEachIndexed { i, v ->
-            val x = M + i * (bw + gap)
-            c.drawRoundRect(RectF(x, top, x + bw, top + chartH), 2f, 2f, fill(TRACK))
-            if (v.cents > 0) {
-                val h = (v.cents.toFloat() / dmax * chartH).coerceAtLeast(2f)
-                c.drawRoundRect(RectF(x, top + chartH - h, x + bw, top + chartH), 2f, 2f, fill(BAR))
-                // Amount, reading bottom-to-top, just above the bar.
-                c.save()
-                c.rotate(-90f, x + bw / 2 + 2.5f, top + chartH - h - 3f)
-                text(c, v.compact(), x + bw / 2 + 2.5f, top + chartH - h - 3f, 7f, INK)
-                c.restore()
-            }
-            // Day number under every bar, centred.
-            val label = "${i + 1}"
-            val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 6.5f }
-            text(c, label, x + bw / 2 - p.measureText(label) / 2, top + chartH + 10, 6.5f, MUTED)
-        }
-        y = top + chartH + 24
-
-        // Week by week, exact amounts.
+        val dayW = 70f
+        val amtW = 100f
+        val dBarW = W - 2 * M - dayW - amtW
         val monthShort = r.month.format(DateTimeFormatter.ofPattern("MMM", Locale.ENGLISH))
+        val dayFmt = DateTimeFormatter.ofPattern("EEE d", Locale.ENGLISH)
         r.weeks.forEach { wk ->
+            newPageIfNeeded(34f)
             val label = if (wk.firstDay == wk.lastDay) "${wk.firstDay} $monthShort" else "${wk.firstDay}–${wk.lastDay} $monthShort"
-            text(c, label, M, y, 10f, MUTED)
-            text(c, wk.amount.pdf(), M + 120, y, 10f, INK, bold = true)
-            y += 15
+            text(c, label, M, y, 10.5f, INK, bold = true)
+            textRight(c, wk.amount.pdf(), W - M, y, 10.5f, INK, bold = true)
+            y += 16
+            for (d in wk.firstDay..wk.lastDay) {
+                val v = r.daily[d - 1]
+                if (v.cents <= 0) continue
+                newPageIfNeeded(15f)
+                text(c, r.month.atDay(d).format(dayFmt), M + 8, y, 9.5f, MUTED)
+                val bwid = (v.cents.toFloat() / dmax * dBarW).coerceAtLeast(3f)
+                c.drawRoundRect(RectF(M + dayW, y - 7, M + dayW + bwid, y + 1), 3f, 3f, fill(BAR))
+                textRight(c, v.pdf(), W - M, y, 9.5f, INK)
+                y += 15
+            }
+            y += 4
         }
-        y += 6; rule(c, y); y += 20
+        y += 4; rule(c, y); y += 20
 
         // Top payees
         if (r.topPayees.isNotEmpty()) {
@@ -198,6 +188,15 @@ object ReportPdf {
             this.color = color; textSize = size
             typeface = if (bold) Typeface.create(Typeface.DEFAULT, Typeface.BOLD) else Typeface.DEFAULT
         })
+    }
+
+    private fun textRight(c: Canvas, s: String, right: Float, y: Float, size: Float, color: Int, bold: Boolean = false) {
+        val p = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.color = color; textSize = size
+            typeface = if (bold) Typeface.create(Typeface.DEFAULT, Typeface.BOLD) else Typeface.DEFAULT
+            textAlign = Paint.Align.RIGHT
+        }
+        c.drawText(s, right, y, p)
     }
 
     private fun wrap(s: String, size: Float, color: Int, width: Float): StaticLayout {

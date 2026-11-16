@@ -51,6 +51,8 @@ fun SettingsScreen(
     onTheme: (ThemeMode) -> Unit,
     onHideAmounts: (Boolean) -> Unit,
     contentPadding: PaddingValues,
+    budgetsOn: Boolean = false,
+    onBudgets: (Boolean) -> Unit = {},
 ) {
     val c = Kash.colors
     val isOnline by online.collectAsStateWithLifecycle(initialValue = true)
@@ -101,6 +103,18 @@ fun SettingsScreen(
         item {
             GlassCard(contentPadding = PaddingValues(horizontal = Space.l, vertical = Space.xs)) {
                 ToggleRow(
+                    icon = Lucide.Target,
+                    title = "Budgets",
+                    body = if (budgetsOn) "Shown on Home. Set limits for food, transport or anything else."
+                    else "Optional. Set monthly limits and see what's left to spend each day.",
+                    checked = budgetsOn,
+                    onChange = onBudgets,
+                )
+            }
+        }
+        item {
+            GlassCard(contentPadding = PaddingValues(horizontal = Space.l, vertical = Space.xs)) {
+                ToggleRow(
                     icon = Lucide.EyeOff,
                     title = "Hide amounts",
                     body = "Show KSh •••• instead of figures, for checking Kash in public.",
@@ -117,7 +131,7 @@ fun SettingsScreen(
                     Column(Modifier.weight(1f)) {
                         Text("Private by design", style = MaterialTheme.typography.titleSmall, color = c.text)
                         Text(
-                            "Your messages are read and stored only on this phone. Nothing is uploaded. Privacy policy version 1, agreed.",
+                            "Your messages are read only on this phone, and what Kash saves is encrypted. Nothing is uploaded. Privacy policy version ${com.kash.app.ui.consent.PRIVACY_POLICY_VERSION}, agreed.",
                             style = MaterialTheme.typography.bodySmall,
                             color = c.textMuted,
                         )
@@ -128,7 +142,7 @@ fun SettingsScreen(
         if (!isOnline) {
             item {
                 Notice(
-                    "You're offline. Everything in Kash still works; backup will resume when you reconnect.",
+                    "You're offline. That's fine: Kash works fully offline.",
                     tone = Tone.INFO,
                     icon = Lucide.WifiOff,
                 )

@@ -30,6 +30,7 @@ class KashApp : Application() {
     val settings: SettingsStore by lazy { SettingsStore(this) }
     val connectivity: Connectivity by lazy { Connectivity(this) }
     val prefs: KashPrefs by lazy { KashPrefs(this) }
+    val budgets: com.kash.app.data.BudgetStore by lazy { com.kash.app.data.BudgetStore(prefs) }
 
     /** True while Kash is on screen: new payments then show as in-app cards, not notifications. */
     @Volatile var onScreen: Boolean = false

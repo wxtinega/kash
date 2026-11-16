@@ -28,10 +28,10 @@ arrives, it reads them again from your inbox and works out your balances, catego
 What it does keep, **only on your phone**:
 - your answers (for example, that a payment to a person was "Food"), which can include that
   person's name or phone number;
-- balances you typed in, accounts you removed, and bank sender names you confirmed;
+- balances you typed in, budgets you set, accounts you removed, and bank sender names you confirmed;
 - your settings (theme, language, lock).
 
-Your answers, balances and account choices are **encrypted** (AES-256) with a key that is created
+Your answers, balances, budgets and account choices are **encrypted** (AES-256) with a key that is created
 inside your phone's secure hardware and never leaves it, not even to Kash. Data saved by earlier
 test versions is moved into this encrypted storage automatically, and the old copy is deleted.
 

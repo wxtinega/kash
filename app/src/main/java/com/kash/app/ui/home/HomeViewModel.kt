@@ -12,6 +12,12 @@ import com.kash.app.data.SenderQuestion
 import com.kash.parser.Provider
 import com.kash.app.data.TxItem
 import com.kash.insights.Category
+import com.kash.insights.BudgetStatus
+import com.kash.insights.Budgets
+import com.kash.insights.MonthlyReports
+import com.kash.app.data.BudgetStore
+import com.kash.app.ui.report.reportEntries
+import java.time.YearMonth
 import com.kash.insights.SafeToSpend
 import com.kash.parser.Money
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -46,9 +52,14 @@ data class HomeUi(
     val gaps: List<MissingMoney> = emptyList(),
     val fuliza: Money = Money.ZERO,
     val senderQuestions: List<SenderQuestion> = emptyList(),
+    /** Budgets (optional). Empty and hidden unless switched on in Settings. */
+    val budgetsOn: Boolean = false,
+    val budgets: List<BudgetStatus> = emptyList(),
+    /** Suggested limits from last month's spending; key null = all spending. */
+    val budgetSuggestions: Map<Category?, Money> = emptyMap(),
 )
 
-class HomeViewModel(private val repo: KashRepository) : ViewModel() {
+class HomeViewModel(private val repo: KashRepository, private val budgetStore: BudgetStore) : ViewModel() {
 
     /** Answers shown immediately, before they're saved (optimistic UI). */
     private val optimistic = MutableStateFlow<Map<String, Category>>(emptyMap())
@@ -56,7 +67,7 @@ class HomeViewModel(private val repo: KashRepository) : ViewModel() {
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
     val messages: SharedFlow<String> = _messages
 
-    val ui: StateFlow<HomeUi> = combine(repo.state, optimistic, showOlder) { s, opt, older ->
+    val ui: StateFlow<HomeUi> = combine(repo.state, optimistic, showOlder, budgetStore.state) { s, opt, older, budgetSettings ->
         val today = LocalDate.now()
         val cutoff = today.minusDays(RECENT_DAYS).atStartOfDay()
         val open = s.questions.filter { it.txId !in opt }
@@ -67,6 +78,12 @@ class HomeViewModel(private val repo: KashRepository) : ViewModel() {
         val spentToday = s.transactions
             .filter { !it.incoming && it.at.toLocalDate() == today && it.category?.isSpending != false }
             .fold(Money.ZERO) { acc, t -> acc + t.amount + t.fee }
+        // Budgets: only worked out when switched on.
+        val thisMonth = YearMonth.from(today)
+        val entries = if (budgetSettings.enabled) s.reportEntries() else emptyList()
+        val budgetStatus = if (budgetSettings.enabled && budgetSettings.budgets.isNotEmpty())
+            Budgets.status(budgetSettings.budgets, MonthlyReports.build(entries, thisMonth), today) else emptyList()
+        val lastMonth = if (budgetSettings.enabled) MonthlyReports.build(entries, thisMonth.minusMonths(1)).takeIf { !it.isEmpty } else null
         val recent = s.transactions.take(6).map { t -> opt[t.id]?.let { t.copy(category = it) } ?: t }
         HomeUi(
             ready = s.ready,
@@ -89,8 +106,15 @@ class HomeViewModel(private val repo: KashRepository) : ViewModel() {
             gaps = s.gaps,
             fuliza = s.fulizaOutstanding,
             senderQuestions = s.senderQuestions,
+            budgetsOn = budgetSettings.enabled,
+            budgets = budgetStatus,
+            budgetSuggestions = if (lastMonth == null) emptyMap() else
+                (listOf<Category?>(null) + Budgets.budgetable).mapNotNull { c -> Budgets.suggest(lastMonth, c)?.let { c to it } }.toMap(),
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUi())
+
+    fun setBudget(category: Category?, limit: Money) = budgetStore.set(category, limit)
+    fun removeBudget(category: Category?) = budgetStore.remove(category)
 
     fun setShowOlder(show: Boolean) = showOlder.update { show }
 

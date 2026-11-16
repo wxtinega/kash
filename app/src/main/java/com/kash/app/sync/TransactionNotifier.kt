@@ -34,6 +34,11 @@ object TransactionNotifier {
 
     @Synchronized // the SMS receiver, background sync and the app can all call this at once
     fun onState(context: Context, state: RepoState, prefs: KashPrefs, onScreen: Boolean, now: LocalDateTime = LocalDateTime.now()) {
+        notifyPayments(context, state, prefs, onScreen, now)
+        runCatching { BudgetNotifier.check(context, state, prefs, onScreen, now.toLocalDate()) }
+    }
+
+    private fun notifyPayments(context: Context, state: RepoState, prefs: KashPrefs, onScreen: Boolean, now: LocalDateTime) {
         val after = prefs.notifyAfter() ?: run {
             prefs.setNotifyAfter(now) // first run of this version: everything already in the inbox is history
             return

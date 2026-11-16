@@ -74,4 +74,24 @@ class KashPrefs(context: Context) {
         // Keep the list small: only the most recent few hundred matter.
         store.putStringSet("notified_tx", (notified() + ids).toList().takeLast(400).toSet())
     }
+
+    /** Budgets: optional, off until the user turns them on. Stored as "FOOD|500000" ("ALL" = all spending). */
+    fun budgetsEnabled(): Boolean = store.getString("budgets_on") == "1"
+    fun setBudgetsEnabled(on: Boolean) = store.putString("budgets_on", if (on) "1" else "0")
+
+    fun budgets(): List<com.kash.insights.Budget> =
+        store.getStringSet("budgets").mapNotNull { e ->
+            val (cat, cents) = e.split('|').takeIf { it.size == 2 } ?: return@mapNotNull null
+            val category = if (cat == "ALL") null else runCatching { com.kash.insights.Category.valueOf(cat) }.getOrNull() ?: return@mapNotNull null
+            val limit = cents.toLongOrNull()?.takeIf { it > 0 } ?: return@mapNotNull null
+            com.kash.insights.Budget(category, Money(limit))
+        }.sortedBy { it.category?.ordinal ?: -1 } // "All spending" first, then category order
+
+    fun setBudgets(list: List<com.kash.insights.Budget>) =
+        store.putStringSet("budgets", list.map { "${it.category?.name ?: "ALL"}|${it.limit.cents}" }.toSet())
+
+    /** Budget heads-ups already sent ("2026-11:FOOD:76"), so each goes out once. */
+    fun budgetAlertsSent(): Set<String> = store.getStringSet("budget_alerts")
+    fun markBudgetAlerts(keys: Collection<String>) =
+        store.putStringSet("budget_alerts", (budgetAlertsSent() + keys).toList().takeLast(200).toSet())
 }

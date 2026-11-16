@@ -126,7 +126,7 @@ fun KashNav(
                 popExitTransition = { fadeOut(tween(90)) },
             ) {
                 composable(Tab.HOME.route) {
-                    val vm: HomeViewModel = viewModel { HomeViewModel(app.repository) }
+                    val vm: HomeViewModel = viewModel { HomeViewModel(app.repository, app.budgets) }
                     HomeScreen(
                         vm = vm,
                         hidden = settings.hideAmounts,
@@ -145,7 +145,10 @@ fun KashNav(
                 composable(Tab.SAVINGS.route) { SavingsScreen(app.repository, settings.hideAmounts, padding) }
                 composable(Tab.SETTINGS.route) {
                     val repoState by app.repository.state.collectAsStateWithLifecycle()
+                    val budgetSettings by app.budgets.state.collectAsStateWithLifecycle()
                     SettingsScreen(
+                        budgetsOn = budgetSettings.enabled,
+                        onBudgets = { app.budgets.setEnabled(it) },
                         settings = settings,
                         online = app.connectivity.isOnline,
                         seenProviders = repoState.seenProviders,

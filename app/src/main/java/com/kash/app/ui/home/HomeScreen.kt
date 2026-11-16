@@ -86,6 +86,17 @@ fun HomeScreen(
             onStopTracking = { acct.provider?.let { vm.stopTracking(it) }; editing = null },
         )
     }
+    var budgetEdit by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<BudgetEdit?>(null) }
+    budgetEdit?.let { e ->
+        BudgetEditorDialog(
+            edit = e,
+            taken = ui.budgets.map { it.budget.category }.toSet(),
+            suggestions = ui.budgetSuggestions,
+            onSave = { cat, m -> vm.setBudget(cat, m); budgetEdit = null },
+            onRemove = { cat -> vm.removeBudget(cat); budgetEdit = null },
+            onDismiss = { budgetEdit = null },
+        )
+    }
     val showSkeleton = rememberShowLoading(!ui.ready)
 
     LazyColumn(
@@ -131,6 +142,11 @@ fun HomeScreen(
 
         if (ui.accounts.isNotEmpty() || ui.savingsTotal.isPositive) {
             item(key = "accounts") { Accounts(ui.accounts, ui.savingsTotal, hidden, onSetBalance = { editing = it }) }
+        }
+
+        // Budgets: only when switched on in Settings.
+        if (ui.budgetsOn) {
+            item(key = "budgets") { BudgetsCard(ui.budgets, hidden, onEdit = { budgetEdit = it }, modifier = Modifier.animateItem()) }
         }
 
         ui.senderQuestions.forEach { q ->
